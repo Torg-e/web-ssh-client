@@ -1,5 +1,6 @@
-Roadmap
-✅ Central host management with favorites, color tags, and encrypted credential storage
+### Roadmap
+
+✅Central host management with favorites, color tags, and encrypted credential storage
 
 ✅ Web terminal with xterm.js, customizable themes, and session reconnect
 
@@ -19,7 +20,8 @@ Roadmap
 
 ✅ Session export to Markdown documentations using AI
 
-Future ideas
+### Future ideas
+
 🔲 Database editor for: MySQL/MariaDB, PostgreSQL, Microsoft SQL Server, MongoDB, SQLite
 
 🔲 proxmox API integration to automatically adopt LXC containers
