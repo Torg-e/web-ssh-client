@@ -16,8 +16,6 @@
 
 ✅ Customizable terminal themes with 7 presets and background images
 
-✅ WireGuard VPN integration for remote networks
-
 ✅ Session export to Markdown documentations using AI
 
 ### Future ideas
