@@ -1,0 +1,15 @@
+Flask
+Flask-SQLAlchemy
+Flask-Login
+Flask-WTF
+Flask-SocketIO
+Werkzeug
+cryptography
+paramiko
+python-dotenv
+gevent
+gevent-websocket
+WTForms
+requests
+openai
+gunicorn
