@@ -6,7 +6,7 @@ RUN adduser --disabled-password --gecos "" --uid 1000 teashell-user
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
