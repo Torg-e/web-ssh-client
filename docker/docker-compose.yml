@@ -1,0 +1,17 @@
+services:
+  teashell:
+    image: ghcr.io/torg-e/teashell:latest
+    container_name: teashell
+    env_file: .env
+    ports:
+      - "${EXTERNAL_PORT:-5000}:5000"
+    networks:
+      - teashell
+    restart: unless-stopped
+
+networks:
+  teashell:
+    driver: bridge
+
+volumes:
+  teashell-data:
