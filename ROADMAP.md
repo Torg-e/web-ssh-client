@@ -22,8 +22,10 @@
 
 🔲 Database editor for: MySQL/MariaDB, PostgreSQL, Microsoft SQL Server, MongoDB, SQLite
 
-🔲 proxmox API integration to automatically adopt LXC containers
+🔲 Proxmox API integration to automatically adopt LXC containers
 
-🔲 quick building blocks that can be executed via one click, for example for an apt update && apt upgrade -y
+🔲 Quick building blocks that can be executed via one click, for example for an apt update && apt upgrade -y
+
+🔲 Built in web code editor to be able to conveniently edit code or configuration files
 
 🔲 More design features :)
