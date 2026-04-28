@@ -10,6 +10,7 @@ COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
+ENV PYTHONPATH=/app/src
 
 RUN chown -R teashell-user:teashell-user /app
 
