@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}SSH Keys – SSH Vault{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/ssh_keys.css">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">
+            <span class="mi mi-lg" style="color:var(--green-primary)">vpn_key</span>
+            SSH <span>Keys</span>
+        </h1>
+        <button onclick="toggleGenForm()" class="btn btn-primary"><span class="mi mi-sm">add</span> Generate Key</button>
+    </div>
+
+    <div class="card mb-2" id="genForm" style="display:none">
+        <div class="card-header">
+            <span class="mi" style="color:var(--green-primary)">enhanced_encryption</span>
+            <h2 class="card-title">Generate New SSH Key</h2>
+        </div>
+        <div class="key-gen-grid">
+            <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input type="text" id="keyName" class="form-control" placeholder="e.g. Production Deploy Key" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Type</label>
+                <select id="keyType" class="form-control" onchange="updateBitsField()">
+                    <option value="ed25519" selected>Ed25519 (recommended)</option>
+                    <option value="rsa">RSA</option>
+                    <option value="ecdsa">ECDSA</option>
+                </select>
+            </div>
+            <div class="form-group" id="bitsGroup" style="display:none">
+                <label class="form-label">Bits</label>
+                <select id="keyBits" class="form-control">
+                    <option value="4096" selected>4096</option>
+                    <option value="2048">2048</option>
+                    <option value="8192">8192</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Passphrase (optional)</label>
+            <input type="password" id="keyPassphrase" class="form-control" placeholder="Leave empty for no password protection">
+        </div>
+        <div class="btn-group">
+            <button onclick="generateKey()" class="btn btn-primary" id="genBtn"><span class="mi mi-sm">enhanced_encryption</span> Generate</button>
+            <button onclick="toggleGenForm()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+
+    {% if keys %}
+    <div style="display:flex;flex-direction:column;gap:1.25rem">
+        {% for key in keys %}
+        <div class="card" id="key-{{ key.id }}">
+            <div class="card-header" style="justify-content:space-between;margin-bottom:0;padding-bottom:0;border-bottom:none">
+                <div style="display:flex;align-items:center;gap:0.75rem">
+                    <span class="mi mi-lg" style="color:var(--green-primary)">vpn_key</span>
+                    <div>
+                        <h2 class="card-title" style="font-size:1.125rem;margin:0">{{ key.name }}</h2>
+                        <div class="key-meta">{{ key.key_type | upper }} {{ key.bits }} bit · {{ key.created_at.strftime('%d %b %Y %H:%M') }}</div>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button onclick="downloadKey({{ key.id }})" class="btn btn-secondary btn-sm"><span class="mi mi-sm">download</span> Private Key</button>
+                    <button onclick="deleteKey({{ key.id }})" class="btn btn-danger btn-sm"><span class="mi mi-sm">delete</span></button>
+                </div>
+            </div>
+
+            <div class="key-section">
+                <label class="form-label">Fingerprint</label>
+                <code style="font-size:0.75rem;color:var(--green-primary);background:var(--bg-tertiary);padding:0.5rem 0.75rem;border-radius:6px;display:block">{{ key.fingerprint }}</code>
+            </div>
+
+            <div class="key-section">
+                <label class="form-label">Public Key</label>
+                <button onclick="openKeyModal('{{ key.name }}', 'keyData-{{ key.id }}')" class="btn btn-secondary btn-sm">
+                    <span class="mi mi-sm">code</span> Show & Copy
+                </button>
+                <textarea id="keyData-{{ key.id }}" style="display:none;">{{ key.public_key }}</textarea>
+            </div>
+
+            <div class="key-section" style="border-bottom:none;padding-bottom:0;margin-bottom:0">
+                <label class="form-label">Deploy to / remove from hosts</label>
+                {% if hosts %}
+                <div class="deploy-chips">
+                    {% for host in hosts %}
+                    {% set is_deployed = host.id in key.deployed_host_ids %}
+                    <div class="deploy-chip">
+                        <div class="deploy-chip-status {{ 'active' if is_deployed }}">
+                            <span class="mi mi-sm">{{ 'check_circle' if is_deployed else 'radio_button_unchecked' }}</span>
+                        </div>
+                        <span class="deploy-chip-name">{{ host.name }}</span>
+                        <div class="deploy-chip-actions">
+                            {% if is_deployed %}
+                            <button onclick="revokeKey({{ key.id }}, {{ host.id }}, '{{ host.name }}')" class="btn btn-ghost btn-xs" style="color:var(--danger)" title="Remove"><span class="mi" style="font-size:18px">remove_circle</span></button>
+                            {% else %}
+                            <button onclick="deployKey({{ key.id }}, {{ host.id }}, '{{ host.name }}')" class="btn btn-ghost btn-xs" style="color:var(--green-primary)" title="Deploy"><span class="mi" style="font-size:18px">add_circle</span></button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-muted" style="font-size:0.8125rem;margin-top:0.5rem">No hosts available. Create a host first.</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <span class="mi" style="font-size:48px">vpn_key</span>
+        <h3>No SSH keys yet</h3>
+        <p>Generate your first SSH key to set up passwordless authentication.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div id="keyModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeKeyModal()">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="modal-title"><span class="mi" style="color:var(--green-primary)">vpn_key</span> Public Key</h3>
+            <button onclick="closeKeyModal()" class="btn btn-ghost btn-sm"><span class="mi mi-sm">close</span></button>
+        </div>
+        <div class="modal-body">
+            <label class="form-label" id="modalKeyName">Key Name</label>
+            <textarea id="modalKeyContent" class="form-control" style="min-height:120px;font-size:0.8125rem;resize:vertical" readonly></textarea>
+        </div>
+        <div class="modal-footer">
+            <button onclick="copyModalKey()" class="btn btn-primary"><span class="mi mi-sm">content_copy</span> Copy</button>
+            <button onclick="closeKeyModal()" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+function toggleGenForm() { 
+    const f = document.getElementById('genForm'); 
+    f.style.display = f.style.display === 'none' ? 'block' : 'none'; 
+}
+
+function updateBitsField() {
+    const t = document.getElementById('keyType').value;
+    document.getElementById('bitsGroup').style.display = t === 'rsa' ? 'block' : 'none';
+}
+
+async function generateKey() {
+    const btn = document.getElementById('genBtn');
+    btn.disabled = true; 
+    btn.innerHTML = '<span class="mi mi-sm">hourglass_empty</span> Generating...';
+    
+    const d = {
+        name: document.getElementById('keyName').value,
+        key_type: document.getElementById('keyType').value,
+        bits: parseInt(document.getElementById('keyBits').value),
+        passphrase: document.getElementById('keyPassphrase').value || ''
+    };
+    
+    if (!d.name) { 
+        showError('Name required'); 
+        btn.disabled = false; 
+        btn.innerHTML = '<span class="mi mi-sm">enhanced_encryption</span> Generate'; 
+        return; 
+    }
+    
+    try {
+        const resp = await fetch('/api/keys', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, 
+            body: JSON.stringify(d) 
+        });
+        const data = await resp.json();
+        if (data.error) { 
+            showError(data.error); 
+        } else { 
+            showToast('Key generated successfully!', 'success'); 
+            setTimeout(() => location.reload(), 500); 
+        }
+    } catch(e) { 
+        showError(e.message); 
+    }
+    btn.disabled = false; 
+    btn.innerHTML = '<span class="mi mi-sm">enhanced_encryption</span> Generate';
+}
+
+function downloadKey(id) { 
+    window.open(`/api/keys/${id}/private`, '_blank'); 
+}
+
+function deleteKey(id) {
+    showConfirm('Really delete SSH key? Keys installed on hosts will remain.', async () => {
+        const resp = await fetch(`/api/keys/${id}`, { method: 'DELETE', headers: { 'X-CSRFToken': CSRF } });
+        if (resp.ok) { 
+            document.getElementById('key-' + id)?.remove(); 
+            showToast('Key deleted', 'info'); 
+        }
+    });
+}
+
+async function deployKey(keyId, hostId, hostName) {
+    showToast(`Deploying to ${hostName}...`, 'info');
+    try {
+        const resp = await fetch(`/api/keys/${keyId}/deploy`, {
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ host_id: hostId })
+        });
+        const data = await resp.json();
+        if (data.error) { showToast(data.error, 'danger'); }
+        else { showToast(data.message, 'success'); setTimeout(() => location.reload(), 800); }
+    } catch(e) { showToast(e.message, 'danger'); }
+}
+
+function revokeKey(keyId, hostId, hostName) {
+    showConfirm(`Remove key from ${hostName}?`, async () => {
+        try {
+            const resp = await fetch(`/api/keys/${keyId}/revoke`, {
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                body: JSON.stringify({ host_id: hostId })
+            });
+            const data = await resp.json();
+            if (data.error) { showToast(data.error, 'danger'); }
+            else { showToast(data.message, 'success'); setTimeout(() => location.reload(), 800); }
+        } catch(e) { showToast(e.message, 'danger'); }
+    });
+}
+
+function openKeyModal(name, sourceId) {
+    const source = document.getElementById(sourceId);
+    document.getElementById('modalKeyName').textContent = name;
+    document.getElementById('modalKeyContent').value = source.value;
+    document.getElementById('keyModal').style.display = 'flex';
+}
+
+function closeKeyModal() {
+    document.getElementById('keyModal').style.display = 'none';
+}
+
+function copyModalKey() {
+    const text = document.getElementById('modalKeyContent').value;
+    navigator.clipboard.writeText(text).then(() => showToast('Public key copied!', 'success'));
+}
+
+function showToast(msg, type) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px;';
+        document.body.appendChild(container);
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-msg toast-${type}`;
+    toast.innerHTML = `<span style="flex:1">${msg}</span><button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()"><span class="mi mi-sm">close</span></button>`;
+    
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('toast-hide');
+        setTimeout(() => toast.remove(), 500);
+    }, 3000);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – SSH Vault{% endblock %}
+
+{% block content %}
+<head>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">
+            <span class="mi mi-lg" style="color:var(--green-primary)">dns</span>
+            Your <span>Hosts</span>
+        </h1>
+        <div class="page-actions">
+            <a href="{{ url_for('sessions_page') }}" class="btn btn-secondary">
+                <span class="mi mi-sm">history</span> Sessions
+            </a>
+            <button onclick="openHostModal()" class="btn btn-primary">
+                <span class="mi mi-sm">add_circle</span> New Host
+            </button>
+        </div>
+    </div>
+
+    {% if favorites %}
+    <div class="section-title">
+        <span class="mi">star</span> Favorites
+    </div>
+    <div class="hosts-grid">
+        {% for host in favorites %}
+        {% include '_host_card.html' %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if hosts %}
+    {% if favorites %}
+    <div class="section-title" style="margin-top:1rem">
+        <span class="mi">computer</span> All Hosts
+    </div>
+    {% endif %}
+    <div class="hosts-grid">
+        {% for host in hosts %}
+        {% include '_host_card.html' %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not favorites and not hosts %}
+    <div class="empty-state">
+        <span class="mi" style="font-size:48px">dns</span>
+        <h3>No hosts yet</h3>
+        <p>Add your first SSH host to get started.</p>
+    </div>
+    {% endif %}
+
+    {% if recent_sessions %}
+    <div class="section-title" style="margin-top:2rem">
+        <span class="mi">history</span> Recent Sessions
+    </div>
+    <div class="card" style="padding:1rem">
+        <div class="sessions-list">
+            {% for s in recent_sessions %}
+            <a href="{{ url_for('sessions_page') }}" class="session-item" style="text-decoration:none;color:inherit">
+                <div class="session-icon {{ s.status }}">
+                    <span class="mi">{% if s.status == 'completed' %}check_circle{% elif s.status == 'active' %}radio_button_checked{% else %}error{% endif %}</span>
+                </div>
+                <div class="session-info">
+                    <div class="session-info-title">{{ s.host.name if s.host else 'Deleted' }}</div>
+                    <div class="session-info-meta">
+                        <span>{{ s.started_at.strftime('%d.%m. %H:%M') }}</span>
+                        {% if s.duration_seconds %}
+                        <span>{{ '%d:%02d' % (s.duration_seconds // 60, s.duration_seconds % 60) }} min</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <span class="session-cmds">{{ s.commands | length }} commands</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div id="hostModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeHostModal()">
+    <div class="modal-card" style="max-width:900px;width:92%;max-height:90vh;overflow-y:auto;padding:0">
+        <div class="modal-header" style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color)">
+            <h3 class="modal-title" style="font-size:1.125rem"><span class="mi" style="color:var(--green-primary)">add_circle</span> <span id="hostModalTitle">New Host</span></h3>
+            <button type="button" onclick="closeHostModal()" class="btn btn-ghost btn-sm"><span class="mi mi-sm">close</span></button>
+        </div>
+        <div class="modal-body" style="padding:1.5rem">
+            <form id="hostForm">
+                <input type="hidden" id="hostId" value="">
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                    <div class="form-group">
+                        <label class="form-label">Display Name</label>
+                        <input type="text" id="hostName" class="form-control" placeholder="Production Server" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hostname / IP</label>
+                        <input type="text" id="hostHostname" class="form-control" placeholder="192.168.1.100" required>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+                    <div class="form-group">
+                        <label class="form-label">Port</label>
+                        <input type="number" id="hostPort" class="form-control" value="22">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="hostUsername" class="form-control" placeholder="root" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Auth Method</label>
+                        <select id="hostAuthType" class="form-control" onchange="toggleAuthFields()">
+                            <option value="password">Password</option>
+                            <option value="key">SSH Key</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="hostPasswordSection">
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" id="hostPassword" class="form-control" placeholder="SSH Password">
+                        <small class="text-muted" style="font-size:0.75rem;display:block;margin-top:4px" id="pwdHint"></small>
+                    </div>
+                </div>
+
+                <div id="hostKeySection" style="display:none">
+                    <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem">
+                        <div class="form-group">
+                            <label class="form-label">SSH Private Key</label>
+                            <textarea id="hostSshKey" class="form-control" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" style="min-height:70px"></textarea>
+                            <small class="text-muted" style="font-size:0.75rem;display:block;margin-top:4px" id="keyHint"></small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Passphrase (optional)</label>
+                            <input type="password" id="hostPassphrase" class="form-control">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0.5rem">
+                    <div class="form-group">
+                        <div style="display:flex;align-items:center;gap:0.5rem">
+                            <input type="checkbox" id="hostIsFavorite" style="width:18px;height:18px;accent-color:var(--green-primary)">
+                            <label for="hostIsFavorite" style="margin:0;font-size:0.9375rem"><span class="mi mi-sm" style="color:var(--warning)">star</span> Favorite</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Color Tag</label>
+                        <select id="hostColorTag" class="form-control">
+                            <option value="">None</option>
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="red">Red</option>
+                            <option value="yellow">Yellow</option>
+                            <option value="purple">Purple</option>
+                            <option value="cyan">Cyan</option>
+                            <option value="orange">Orange</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea id="hostDescription" class="form-control" placeholder="Notes..." style="min-height:70px;font-family:var(--font-sans)"></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer" style="padding:1.25rem 1.5rem;border-top:1px solid var(--border-color)">
+            <button type="button" onclick="closeHostModal()" class="btn btn-secondary btn-sm">Cancel</button>
+            <button type="button" onclick="saveHost()" class="btn btn-primary btn-sm"><span class="mi mi-sm">save</span> Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+function openHostModal(hostId) {
+    document.getElementById('hostForm').reset();
+    document.getElementById('hostId').value = hostId || '';
+    document.getElementById('hostModalTitle').textContent = hostId ? 'Edit Host' : 'New Host';
+    document.getElementById('hostPort').value = 22;
+    document.getElementById('pwdHint').textContent = hostId ? 'Leave empty to keep existing password' : '';
+    document.getElementById('keyHint').textContent = hostId ? 'Leave empty to keep existing key' : '';
+    if (hostId) {
+        fetch(`/api/hosts/${hostId}`, { headers: {'X-CSRFToken': CSRF} })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('hostName').value = data.name;
+                document.getElementById('hostHostname').value = data.hostname;
+                document.getElementById('hostPort').value = data.port;
+                document.getElementById('hostUsername').value = data.username;
+                document.getElementById('hostAuthType').value = data.auth_type;
+                document.getElementById('hostDescription').value = data.description || '';
+                document.getElementById('hostIsFavorite').checked = data.is_favorite;
+                document.getElementById('hostColorTag').value = data.color_tag || '';
+                toggleAuthFields();
+                document.getElementById('hostModal').style.display = 'flex';
+            });
+    } else {
+        toggleAuthFields();
+        document.getElementById('hostModal').style.display = 'flex';
+    }
+}
+
+function closeHostModal() {
+    document.getElementById('hostModal').style.display = 'none';
+}
+
+function toggleAuthFields() {
+    const type = document.getElementById('hostAuthType').value;
+    document.getElementById('hostPasswordSection').style.display = type === 'password' ? 'block' : 'none';
+    document.getElementById('hostKeySection').style.display = type === 'key' ? 'block' : 'none';
+}
+
+async function saveHost() {
+    const id = document.getElementById('hostId').value;
+    const data = {
+        name: document.getElementById('hostName').value.trim(),
+        hostname: document.getElementById('hostHostname').value.trim(),
+        port: parseInt(document.getElementById('hostPort').value) || 22,
+        username: document.getElementById('hostUsername').value.trim(),
+        auth_type: document.getElementById('hostAuthType').value,
+        password: document.getElementById('hostPassword').value,
+        ssh_key: document.getElementById('hostSshKey').value,
+        passphrase: document.getElementById('hostPassphrase').value,
+        description: document.getElementById('hostDescription').value,
+        is_favorite: document.getElementById('hostIsFavorite').checked,
+        color_tag: document.getElementById('hostColorTag').value
+    };
+    const url = id ? `/api/hosts/${id}` : '/api/hosts';
+    const method = id ? 'PUT' : 'POST';
+    try {
+        const resp = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+        if (result.success) {
+            closeHostModal();
+            window.location.reload();
+        } else {
+            alert(result.error || 'Error saving host');
+        }
+    } catch (e) {
+        alert('Network error');
+    }
+}
+
+document.querySelectorAll('.fav-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+        e.preventDefault();
+        e.stopPropagation();
+        const hostId = btn.dataset.hostId;
+        const resp = await fetch(`/host/${hostId}/toggle-favorite`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF }
+        });
+        if (resp.ok) window.location.reload();
+    });
+});
+</script>
+{% endblock %}

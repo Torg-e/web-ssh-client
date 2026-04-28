@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block title %}Terminal Styles – SSH Vault{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/terminal_styles.css">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title"><span class="mi mi-lg" style="color:var(--green-primary);vertical-align:middle;margin-right:8px">palette</span> Terminal <span>Styles</span></h1>
+    </div>
+
+    <div class="card mb-2">
+        <div class="card-header">
+            <span class="mi" style="color:var(--green-primary)">auto_awesome</span>
+            <h2 class="card-title">Presets</h2>
+        </div>
+        <div class="preset-grid" id="presetGrid"></div>
+    </div>
+
+    <div class="style-layout">
+        <div class="card">
+            <div class="card-header">
+                <span class="mi" style="color:var(--green-primary)">tune</span>
+                <h2 class="card-title">Customize</h2>
+            </div>
+            <form method="POST" id="styleForm" novalidate>
+                {{ form.hidden_tag() }}
+
+                <div class="form-group">
+                    <label class="form-label">Style Name</label>
+                    {{ form.name(class="form-control", id="styleName") }}
+                </div>
+
+                <div class="form-divider">Colors</div>
+                <div class="color-grid">
+                    <div class="color-field">
+                        <input type="color" id="cp_bg" value="{{ form.background.data or '#1c1c1c' }}">
+                        {{ form.background(type="text", class="form-control", id="f_bg", style="width:80px") }}
+                        <label>Background</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_fg" value="{{ form.foreground.data or '#ededed' }}">
+                        {{ form.foreground(type="text", class="form-control", id="f_fg", style="width:80px") }}
+                        <label>Foreground</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_cursor" value="{{ form.cursor_color.data or '#3ecf8e' }}">
+                        {{ form.cursor_color(type="text", class="form-control", id="f_cursor", style="width:80px") }}
+                        <label>Cursor</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_red" value="{{ form.color_red.data or '#f56565' }}">
+                        {{ form.color_red(type="text", class="form-control", id="f_red", style="width:80px") }}
+                        <label>Red</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_green" value="{{ form.color_green.data or '#3ecf8e' }}">
+                        {{ form.color_green(type="text", class="form-control", id="f_green", style="width:80px") }}
+                        <label>Green</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_yellow" value="{{ form.color_yellow.data or '#ecc94b' }}">
+                        {{ form.color_yellow(type="text", class="form-control", id="f_yellow", style="width:80px") }}
+                        <label>Yellow</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_blue" value="{{ form.color_blue.data or '#63b3ed' }}">
+                        {{ form.color_blue(type="text", class="form-control", id="f_blue", style="width:80px") }}
+                        <label>Blue</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_magenta" value="{{ form.color_magenta.data or '#b794f6' }}">
+                        {{ form.color_magenta(type="text", class="form-control", id="f_magenta", style="width:80px") }}
+                        <label>Magenta</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_cyan" value="{{ form.color_cyan.data or '#76e4f7' }}">
+                        {{ form.color_cyan(type="text", class="form-control", id="f_cyan", style="width:80px") }}
+                        <label>Cyan</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_white" value="{{ form.color_white.data or '#ededed' }}">
+                        {{ form.color_white(type="text", class="form-control", id="f_white", style="width:80px") }}
+                        <label>White</label>
+                    </div>
+                    <div class="color-field">
+                        <input type="color" id="cp_black" value="{{ form.color_black.data or '#1c1c1c' }}">
+                        {{ form.color_black(type="text", class="form-control", id="f_black", style="width:80px") }}
+                        <label>Black</label>
+                    </div>
+                </div>
+
+                <div class="form-divider">Terminal</div>
+                <div class="form-group">
+                    <label class="form-label">Font Size</label>
+                    {{ form.font_size(class="form-control", type="number", min=8, max=32) }}
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Font Family</label>
+                    {{ form.font_family(class="form-control") }}
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cursor Style</label>
+                    {{ form.cursor_style(class="form-control") }}
+                </div>
+                <div class="form-group">
+                    <div class="form-check">
+                        {{ form.cursor_blink(id="cursor_blink") }}
+                        <label for="cursor_blink">Cursor Blink</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Scrollback Lines</label>
+                    {{ form.scrollback(class="form-control", type="number") }}
+                </div>
+
+                <div class="form-divider">Background Image</div>
+                <div class="form-group">
+                    <label class="form-label">Image URL</label>
+                    {{ form.bg_image_url(class="form-control", placeholder="https://example.com/bg.jpg") }}
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Opacity (0.0 - 1.0)</label>
+                    {{ form.bg_opacity(class="form-control", type="number", step="0.05", min="0", max="1") }}
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Blur (px)</label>
+                    {{ form.bg_blur(class="form-control", type="number", min="0", max="50") }}
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block mt-2">
+                    <span class="mi mi-sm">save</span> Save Style
+                </button>
+            </form>
+        </div>
+
+        <div>
+            <div class="card" style="position:sticky;top:80px">
+                <div class="card-header">
+                    <span class="mi" style="color:var(--green-primary)">preview</span>
+                    <h2 class="card-title">Preview</h2>
+                </div>
+                <div class="preview-terminal" id="previewTerminal">
+                    <div class="preview-terminal-bar">
+                        <div class="preview-dot" style="background:#f56565"></div>
+                        <div class="preview-dot" style="background:#ecc94b"></div>
+                        <div class="preview-dot" style="background:#3ecf8e"></div>
+                        <span style="margin-left:8px;font-size:0.75rem;color:var(--text-muted)">Terminal Preview</span>
+                    </div>
+                    <div class="preview-terminal-content" id="previewContent" style="position:relative">
+                        <div id="previewBgLayer" style="position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;pointer-events:none"></div>
+                        <div id="previewText" style="position:relative;z-index:1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const colorPairs = [
+    ['cp_bg','f_bg'], ['cp_fg','f_fg'], ['cp_cursor','f_cursor'],
+    ['cp_red','f_red'], ['cp_green','f_green'], ['cp_yellow','f_yellow'],
+    ['cp_blue','f_blue'], ['cp_magenta','f_magenta'], ['cp_cyan','f_cyan'],
+    ['cp_white','f_white'], ['cp_black','f_black']
+];
+
+colorPairs.forEach(([cp, f]) => {
+    const picker = document.getElementById(cp);
+    const field = document.getElementById(f);
+    if (!picker || !field) return;
+    picker.addEventListener('input', () => { field.value = picker.value; updatePreview(); });
+    field.addEventListener('input', () => { picker.value = field.value; updatePreview(); });
+});
+
+function updatePreview() {
+    const bg = document.getElementById('f_bg').value;
+    const fg = document.getElementById('f_fg').value;
+    const cursor = document.getElementById('f_cursor').value;
+    const red = document.getElementById('f_red').value;
+    const green = document.getElementById('f_green').value;
+    const yellow = document.getElementById('f_yellow').value;
+    const blue = document.getElementById('f_blue').value;
+    const magenta = document.getElementById('f_magenta').value;
+    const cyan = document.getElementById('f_cyan').value;
+    const fontSize = document.getElementById('font_size').value + 'px';
+    const fontFamily = document.getElementById('font_family').value;
+    const bgUrl = document.getElementById('bg_image_url').value;
+    const bgOpacity = document.getElementById('bg_opacity').value;
+    const bgBlur = document.getElementById('bg_blur').value;
+
+    const el = document.getElementById('previewContent');
+    el.style.background = bg;
+    el.style.fontFamily = fontFamily;
+    el.style.fontSize = fontSize;
+
+    const bgLayer = document.getElementById('previewBgLayer');
+    if (bgUrl) {
+        bgLayer.style.backgroundImage = `url(${bgUrl})`;
+        bgLayer.style.opacity = bgOpacity;
+        bgLayer.style.filter = `blur(${bgBlur}px)`;
+    } else {
+        bgLayer.style.backgroundImage = 'none';
+    }
+
+    document.getElementById('previewText').innerHTML = `
+<span style="color:${green}">user@server</span><span style="color:${fg}">:</span><span style="color:${blue}">~</span><span style="color:${fg}">$ </span><span style="color:${fg}">ls -la</span>
+<span style="color:${fg}">total 48</span>
+<span style="color:${blue}">drwxr-xr-x</span>  <span style="color:${fg}">5 user user 4096 Jan 15 10:30</span> <span style="color:${blue}">.</span>
+<span style="color:${blue}">drwxr-xr-x</span>  <span style="color:${fg}">3 user user 4096 Jan 10 08:15</span> <span style="color:${blue}">..</span>
+<span style="color:${green}">-rwxr-xr-x</span>  <span style="color:${fg}">1 user user 8192 Jan 15 10:28</span> <span style="color:${green}">deploy.sh</span>
+<span style="color:${yellow}">-rw-r--r--</span>  <span style="color:${fg}">1 user user 2048 Jan 14 16:45</span> <span style="color:${yellow}">config.yml</span>
+<span style="color:${red}">-rw-------</span>  <span style="color:${fg}">1 user user  512 Jan 13 09:00</span> <span style="color:${red}">.env</span>
+<span style="color:${magenta}">lrwxrwxrwx</span>  <span style="color:${fg}">1 user user   15 Jan 12 14:20</span> <span style="color:${cyan}">logs</span> -> <span style="color:${magenta}">/var/log/app</span>
+
+<span style="color:${green}">user@server</span><span style="color:${fg}">:</span><span style="color:${blue}">~</span><span style="color:${fg}">$ </span><span style="color:${cursor};text-decoration:underline">█</span>`;
+}
+
+['font_size','font_family','cursor_style','bg_image_url','bg_opacity','bg_blur'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updatePreview);
+});
+
+updatePreview();
+
+fetch('/api/styles/presets')
+.then(r => r.json())
+.then(presets => {
+    const grid = document.getElementById('presetGrid');
+    for (const [key, preset] of Object.entries(presets)) {
+        const card = document.createElement('div');
+        card.className = 'preset-card';
+        card.innerHTML = `
+            <div class="preset-preview" style="background:${preset.background};color:${preset.color_green}">$ █</div>
+            <div class="preset-name">${preset.name}</div>`;
+        card.onclick = () => {
+            const map = {
+                'f_bg': preset.background, 'f_fg': preset.foreground,
+                'f_cursor': preset.cursor_color, 'f_black': preset.color_black,
+                'f_red': preset.color_red, 'f_green': preset.color_green,
+                'f_yellow': preset.color_yellow, 'f_blue': preset.color_blue,
+                'f_magenta': preset.color_magenta, 'f_cyan': preset.color_cyan,
+                'f_white': preset.color_white
+            };
+            for (const [fId, val] of Object.entries(map)) {
+                const f = document.getElementById(fId);
+                const cp = document.getElementById(fId.replace('f_', 'cp_'));
+                if (f) f.value = val;
+                if (cp) cp.value = val;
+            }
+            document.getElementById('styleName').value = preset.name;
+            updatePreview();
+        };
+        grid.appendChild(card);
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,49 @@
+<div class="host-card" data-color="{{ host.color_tag }}" data-terminal-url="{{ url_for('terminal', host_id=host.id) }}">
+    <div class="host-card-header">
+        <div class="host-card-header-left">
+            <button class="fav-btn {{ 'active' if host.is_favorite }}" data-host-id="{{ host.id }}" title="Favorite">
+                <span class="mi">{{ 'star' if host.is_favorite else 'star_border' }}</span>
+            </button>
+            <div class="host-name" title="{{ host.name }}">{{ host.name }}</div>
+        </div>
+        <div class="host-card-header-right">
+            <span class="host-badge {{ 'badge-key' if host.auth_type == 'key' else 'badge-password' }}">
+                <span class="mi">{{ 'key' if host.auth_type == 'key' else 'password' }}</span>
+                {{ 'Key' if host.auth_type == 'key' else 'Pass' }}
+            </span>
+        </div>
+    </div>
+
+    <div class="host-details">
+        <div class="host-detail">
+            <span class="mi">computer</span>
+            <code>{{ host.hostname }}:{{ host.port }}</code>
+        </div>
+        <div class="host-detail">
+            <span class="mi">person</span>
+            <span>{{ host.username }}</span>
+        </div>
+    </div>
+
+    {% if host.description %}
+    <div class="host-description">{{ host.description }}</div>
+    {% endif %}
+
+    <div class="host-actions">
+        <a href="{{ url_for('terminal', host_id=host.id) }}" target="_blank" class="btn btn-primary btn-sm">
+            <span class="mi mi-sm">terminal</span> SSH
+        </a>
+        <a href="{{ url_for('file_browser', host_id=host.id) }}" class="btn btn-secondary btn-sm">
+            <span class="mi mi-sm">folder_open</span> SFTP
+        </a>
+        <button type="button" onclick="openHostModal({{ host.id }})" class="btn btn-secondary btn-sm">
+            <span class="mi mi-sm">edit</span>
+        </button>
+        <form method="POST" action="{{ url_for('host_delete', host_id=host.id) }}" style="display:flex">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="button" data-name="{{ host.name }}" onclick="const f=this.closest('form');showConfirm('Delete host \x22'+this.dataset.name+'\x22?',()=>f.submit())" class="btn btn-danger btn-sm">
+                <span class="mi mi-sm">delete</span>
+            </button>
+        </form>
+    </div>
+</div>

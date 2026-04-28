@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} – SSH Vault{% endblock %}
+
+{% block content %}
+<head>
+    <link rel="stylesheet" href="/static/css/host_form.css">
+</head>
+<div class="container-sm" style="padding-top:3rem">
+    <div class="card">
+        <div class="card-header">
+            <span class="mi mi-lg" style="color:var(--green-primary)">{{ 'add_circle' if not host else 'edit' }}</span>
+            <h2 class="card-title">{{ title }}</h2>
+        </div>
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                <label class="form-label">Anzeigename</label>
+                {{ form.name(class="form-control", placeholder="z.B. Production Server") }}
+                {% for e in form.name.errors %}<div class="form-error">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="form-group">
+                <label class="form-label">Hostname / IP</label>
+                {{ form.hostname(class="form-control", placeholder="192.168.1.100") }}
+                {% for e in form.hostname.errors %}<div class="form-error">{{ e }}</div>{% endfor %}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <label class="form-label">Port</label>
+                    {{ form.port(class="form-control") }}
+                    {% for e in form.port.errors %}<div class="form-error">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SSH Benutzername</label>
+                    {{ form.username(class="form-control", placeholder="root", autocomplete="off") }}
+                    {% for e in form.username.errors %}<div class="form-error">{{ e }}</div>{% endfor %}
+                </div>
+            </div>
+
+            <div class="form-divider">Authentifizierung</div>
+            <div class="form-group">
+                <label class="form-label">Methode</label>
+                {{ form.auth_type(class="form-control", id="auth_type") }}
+            </div>
+            <div id="password-section">
+                <div class="form-group">
+                    <label class="form-label">Passwort</label>
+                    {{ form.password(class="form-control", placeholder="SSH Passwort", autocomplete="new-password") }}
+                    {% if host %}<small class="text-muted" style="font-size:0.75rem;margin-top:4px;display:block">Leer lassen um bestehendes Passwort beizubehalten</small>{% endif %}
+                </div>
+            </div>
+            <div id="key-section" class="hidden">
+                <div class="form-group">
+                    <label class="form-label">SSH Private Key</label>
+                    {{ form.ssh_key(class="form-control", placeholder="-----BEGIN OPENSSH PRIVATE KEY-----") }}
+                    {% if host %}<small class="text-muted" style="font-size:0.75rem;margin-top:4px;display:block">Leer lassen um bestehenden Key beizubehalten</small>{% endif %}
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Key Passphrase (optional)</label>
+                    {{ form.passphrase(class="form-control", autocomplete="new-password") }}
+                </div>
+            </div>
+
+            <div class="form-divider">Optionen</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div class="form-group">
+                    <div class="form-check">
+                        {{ form.is_favorite(id="is_favorite") }}
+                        <label for="is_favorite"><span class="mi mi-sm" style="color:var(--warning)">star</span> Favorit</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Farb-Tag</label>
+                    {{ form.color_tag(class="form-control") }}
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Beschreibung (optional)</label>
+                {{ form.description(class="form-control", placeholder="Notizen...", style="min-height:80px;font-family:var(--font-sans)") }}
+            </div>
+            <div class="btn-group mt-2">
+                <button type="submit" class="btn btn-primary" style="flex:2"><span class="mi mi-sm">save</span> Speichern</button>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary" style="flex:1">Abbrechen</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const at = document.getElementById('auth_type');
+    function toggle() {
+        document.getElementById('password-section').classList.toggle('hidden', at.value === 'key');
+        document.getElementById('key-section').classList.toggle('hidden', at.value !== 'key');
+    }
+    at.addEventListener('change', toggle); toggle();
+</script>
+{% endblock %}

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ host.name }} – SSH Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='img/terminal.png') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/old_global.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/terminal.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+<div class="terminal-wrapper">
+    <div class="terminal-header">
+        <div class="terminal-title">
+            <span class="terminal-status" id="statusDot"></span>
+            <span>{{ host.name }}</span>
+            <span style="color:var(--text-muted);font-weight:400;font-size:0.75rem">
+                {{ host.username }}@{{ host.hostname }}:{{ host.port }}
+            </span>
+            <div class="rec-indicator" id="recIndicator" style="display:none">
+                <div class="rec-dot"></div><span>REC</span>
+            </div>
+        </div>
+        <div class="terminal-header-actions">
+            <button onclick="doReconnect()" class="btn btn-ghost btn-sm" title="Reconnect" id="btnReconnect">
+                <span class="mi">refresh</span>
+            </button>
+            <button onclick="doSessionReconnect()" class="btn btn-ghost btn-sm" title="Restore session" id="btnSessionReconnect" style="display:none">
+                <span class="mi">history</span>
+            </button>
+            <button onclick="togglePanel('snippets')" class="btn btn-ghost btn-sm" title="Commands"><span class="mi">menu_book</span></button>
+            <button onclick="togglePanel('ai')" class="btn btn-ghost btn-sm" title="AI Assistant"><span class="mi">smart_toy</span></button>
+            <button onclick="togglePanel('sessions')" class="btn btn-ghost btn-sm" title="Sessions"><span class="mi">history</span></button>
+            <button onclick="closeTerminalTab()" class="btn btn-ghost btn-sm" title="Close & go back"><span class="mi">close</span></button>
+        </div>
+    </div>
+
+    <div class="reconnect-banner" id="reconnectBanner">
+        <span class="mi mi-sm">info</span>
+        <span id="reconnectText">Previous session found.</span>
+        <button onclick="doSessionReconnect()" class="btn btn-primary btn-sm">
+            <span class="mi mi-sm">restore</span> Restore session
+        </button>
+        <button onclick="dismissReconnect()" class="btn btn-ghost btn-sm"><span class="mi mi-sm">close</span></button>
+    </div>
+    <div class="terminal-body">
+        <div class="terminal-main">
+            <div class="terminal-bg-layer" id="termBgLayer"></div>
+            <div class="terminal-container" style="position:relative">
+                <div class="replay-indicator" id="replayIndicator">
+                    <span class="mi mi-sm">fast_rewind</span> Replaying history...
+                </div>
+                <div id="terminal"></div>
+            </div>
+        </div>
+
+        <div class="sidebar-panel" id="rightPanel">
+            <div class="sidebar-header">
+                <h3 id="panelTitle"><span class="mi">menu_book</span> <span id="panelTitleText">Commands</span></h3>
+                <button onclick="closePanel()" class="btn btn-ghost btn-sm"><span class="mi">close</span></button>
+            </div>
+            <div class="sidebar-tabs">
+                <div class="sidebar-tab active" data-tab="snippets" onclick="switchTab('snippets')"><span class="mi">menu_book</span> Commands</div>
+                <div class="sidebar-tab" data-tab="ai" onclick="switchTab('ai')"><span class="mi">smart_toy</span> AI</div>
+                <div class="sidebar-tab" data-tab="sessions" onclick="switchTab('sessions')"><span class="mi">history</span> Sessions</div>
+            </div>
+
+            <div class="sidebar-body tab-content active" id="tab-snippets">
+                <div id="snippetsList"></div>
+                <div style="margin-top:1rem">
+                    <button onclick="toggleSnippetForm()" class="btn btn-secondary btn-sm btn-block"><span class="mi mi-sm">add</span> Custom</button>
+                    <div id="snippetForm" class="hidden" style="margin-top:0.75rem">
+                        <div class="snippet-add-form">
+                            <input type="text" id="snipCategory" placeholder="Category" value="Custom">
+                            <input type="text" id="snipTitle" placeholder="Title *">
+                            <textarea id="snipCommand" placeholder="Command *"></textarea>
+                            <textarea id="snipDesc" placeholder="Description" style="min-height:40px"></textarea>
+                            <div class="btn-group">
+                                <button onclick="saveSnippet()" class="btn btn-primary btn-sm" style="flex:1"><span class="mi mi-sm">save</span> Save</button>
+                                <button onclick="toggleSnippetForm()" class="btn btn-secondary btn-sm">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-body tab-content" id="tab-ai" style="display:none;flex-direction:column;padding:0">
+                <div style="flex:1;overflow-y:auto;padding:1rem" id="aiMessages">
+                    <div class="ai-message assistant">
+                        <p>Hello! I am your SSH assistant. Ask me about commands or troubleshooting.</p>
+                        <p style="margin-top:0.5rem;font-size:0.6875rem;color:var(--text-muted)">
+                            Tip: I automatically see what is currently happening in your terminal. You do not need to manually attach context anymore.
+                        </p>
+                    </div>
+                </div>
+                <div style="border-top:1px solid var(--border-color);padding:0.75rem 1rem">
+                    <div class="ai-input-row">
+                        <textarea id="aiInput" placeholder="Ask the AI assistant..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAI()}"></textarea>
+                        <button onclick="sendAI()" class="btn btn-primary btn-sm" id="aiSendBtn"><span class="mi mi-sm">send</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-body tab-content" id="tab-sessions" style="display:none">
+                <div id="sessionsList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const HOST_ID = {{ host.id }};
+let wsToken = "{{ ws_token }}";
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+const styleConfig = {{ style_config | safe }};
+
+const termOpts = {
+    theme: styleConfig.theme || {
+        background:'#1c1c1c', foreground:'#ededed', cursor:'#3ecf8e',
+        cursorAccent:'#1c1c1c', selectionBackground:'rgba(62,207,142,0.3)',
+        black:'#1c1c1c', red:'#f56565', green:'#3ecf8e', yellow:'#ecc94b',
+        blue:'#63b3ed', magenta:'#b794f6', cyan:'#76e4f7', white:'#ededed',
+        brightBlack:'#666', brightRed:'#fc8181', brightGreen:'#68d391',
+        brightYellow:'#fbd38d', brightBlue:'#90cdf4', brightMagenta:'#d6bcfa',
+        brightCyan:'#9decf9', brightWhite:'#fff'
+    },
+    fontFamily: styleConfig.fontFamily || "'JetBrains Mono', monospace",
+    fontSize: styleConfig.fontSize || 14,
+    cursorBlink: styleConfig.cursorBlink !== undefined ? styleConfig.cursorBlink : true,
+    cursorStyle: styleConfig.cursorStyle || 'block',
+    scrollback: styleConfig.scrollback || 10000,
+    lineHeight: 1.2,
+    allowProposedApi: true,
+    allowTransparency: true
+};
+
+if (styleConfig.bgImageUrl) {
+    const bg = document.getElementById('termBgLayer');
+    bg.style.backgroundImage = `url(${styleConfig.bgImageUrl})`;
+    bg.style.opacity = styleConfig.bgOpacity || 1;
+    bg.style.filter = `blur(${styleConfig.bgBlur || 0}px)`;
+    styleConfig.theme.background = 'transparent';
+    document.querySelector('.terminal-wrapper').classList.add('has-bg-image');
+}
+
+const term = new Terminal(termOpts);
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.loadAddon(new WebLinksAddon.WebLinksAddon());
+term.open(document.getElementById('terminal'));
+fitAddon.fit();
+
+const statusDot = document.getElementById('statusDot');
+const recIndicator = document.getElementById('recIndicator');
+const replayIndicator = document.getElementById('replayIndicator');
+const reconnectBanner = document.getElementById('reconnectBanner');
+let socket = null;
+let currentRecordingId = null;
+let isConnected = false;
+let isReplaying = false;
+let pendingReconnectRecordingId = null;
+let connectionAttempted = false;
+
+async function checkForActiveSession() {
+    try {
+        const resp = await fetch(`/api/sessions/active/${HOST_ID}`, { headers: { 'X-CSRFToken': CSRF } });
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        if (data.has_active) {
+            pendingReconnectRecordingId = data.recording_id;
+            document.getElementById('reconnectText').textContent = `Live session found (${data.command_count} commands). Take over connection?`;
+            reconnectBanner.classList.add('show');
+            document.getElementById('btnSessionReconnect').style.display = '';
+            return data;
+        } else if (data.has_replay && data.recording_id) {
+            pendingReconnectRecordingId = data.recording_id;
+            document.getElementById('reconnectText').textContent = 'Previous session found. Restore history and reconnect?';
+            reconnectBanner.classList.add('show');
+            document.getElementById('btnSessionReconnect').style.display = '';
+            return data;
+        }
+    } catch (e) { }
+    return null;
+}
+
+function dismissReconnect() {
+    reconnectBanner.classList.remove('show');
+    pendingReconnectRecordingId = null;
+    document.getElementById('btnSessionReconnect').style.display = 'none';
+}
+
+function connectSSH(reconnectRecordingId) {
+    if (socket) { socket.disconnect(); socket = null; }
+    dismissReconnect();
+    connectionAttempted = true;
+    socket = io('/ssh', { transports: ['websocket'], forceNew: true });
+
+    socket.on('connect', () => {
+        const payload = {
+            host_id: HOST_ID, ws_token: wsToken,
+            cols: term.cols, rows: term.rows
+        };
+        if (reconnectRecordingId) {
+            payload.reconnect_recording_id = reconnectRecordingId;
+        }
+        socket.emit('start_session', payload);
+    });
+
+    socket.on('new_token', data => { wsToken = data.token; });
+
+    socket.on('replay_start', () => {
+        isReplaying = true;
+        replayIndicator.classList.add('show');
+        term.write('\x1b[1;33m--- Replaying history ---\x1b[0m\r\n');
+    });
+    socket.on('replay_end', () => {
+        isReplaying = false;
+        replayIndicator.classList.remove('show');
+    });
+
+    socket.on('output', data => {
+        term.write(data.data);
+        if (data.data.includes('✓ Connected') || data.data.includes('✓ Live session')) {
+            statusDot.classList.add('connected');
+            isConnected = true;
+        }
+    });
+
+    socket.on('recording_started', data => {
+        currentRecordingId = data.recording_id;
+        recIndicator.style.display = 'flex';
+        loadHostSessions();
+    });
+
+    socket.on('session_ended', () => {
+        statusDot.classList.remove('connected');
+        recIndicator.style.display = 'none';
+        isConnected = false;
+        if (currentRecordingId) {
+            pendingReconnectRecordingId = currentRecordingId;
+            document.getElementById('reconnectText').textContent = 'Session ended. Restore history and reconnect?';
+            reconnectBanner.classList.add('show');
+            document.getElementById('btnSessionReconnect').style.display = '';
+        }
+    });
+
+    socket.on('disconnect', () => {
+        statusDot.classList.remove('connected');
+        recIndicator.style.display = 'none';
+        isConnected = false;
+    });
+
+    socket.on('connect_error', err => {
+        term.write(`\r\n\x1b[1;31m[Connection error: ${err.message}]\x1b[0m\r\n`);
+    });
+}
+
+function closeTerminalTab() {
+    if (socket) { socket.disconnect(); socket = null; }
+    if (window.opener || window.history.length <= 1) { window.close(); }
+    setTimeout(() => {
+        if (!document.hidden) { term.write('\r\n\x1b[1;33m[Tab cannot be closed automatically – please close manually]\x1b[0m\r\n'); }
+    }, 300);
+}
+
+window.addEventListener('beforeunload', () => { if (socket) socket.disconnect(); });
+
+term.onData(data => { if (socket?.connected && !isReplaying) socket.emit('input', { data }); });
+window.addEventListener('resize', () => {
+    fitAddon.fit();
+    if (socket?.connected) socket.emit('resize', { cols: term.cols, rows: term.rows });
+});
+
+function pasteToTerminal(cmd) {
+    if (socket?.connected && !isReplaying) {
+        socket.emit('input', { data: cmd });
+        term.focus();
+    }
+}
+
+function executeInTerminal(cmd) {
+    if (socket?.connected && !isReplaying) {
+        socket.emit('input', { data: cmd + '\n' });
+        term.focus();
+    }
+}
+
+function doReconnect() {
+    term.clear();
+    term.write('\x1b[1;36m[New connection...]\x1b[0m\r\n\r\n');
+    connectSSH(null);
+}
+function doSessionReconnect() {
+    if (!pendingReconnectRecordingId) return doReconnect();
+    term.clear();
+    term.write('\x1b[1;36m[Restoring session...]\x1b[0m\r\n\r\n');
+    const recId = pendingReconnectRecordingId;
+    pendingReconnectRecordingId = null;
+    connectSSH(recId);
+}
+
+(async function init() {
+    term.write(`Connecting to \x1b[1;36m{{ host.name }}\x1b[0m...\r\n\r\n`);
+    const active = await checkForActiveSession();
+    if (!active) {
+        connectSSH(null);
+    } else if (active.has_active) {
+        term.write('\x1b[1;33mAn active live session was found.\x1b[0m\r\n');
+        term.write('Click "Restore session" or "Reconnect" above for a new connection.\r\n\r\n');
+    } else if (active.has_replay) {
+        term.write('\x1b[1;33mA previous session was found.\x1b[0m\r\n');
+        term.write('Click "Restore session" above or wait 8 seconds for a new connection.\r\n\r\n');
+    }
+    term.focus();
+})();
+
+setTimeout(() => { if (!connectionAttempted) connectSSH(null); }, 8000);
+
+let activePanel = null;
+function togglePanel(name) {
+    const panel = document.getElementById('rightPanel');
+    if (activePanel === name) {
+        panel.classList.remove('open');
+        activePanel = null;
+    } else {
+        panel.classList.add('open');
+        activePanel = name;
+        switchTab(name);
+    }
+    setTimeout(() => fitAddon.fit(), 300);
+}
+function closePanel() {
+    document.getElementById('rightPanel').classList.remove('open');
+    activePanel = null;
+    setTimeout(() => fitAddon.fit(), 300);
+}
+function switchTab(name) {
+    document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.tab-content').forEach(c => {
+        const isActive = c.id === 'tab-' + name;
+        c.classList.toggle('active', isActive);
+        c.style.display = isActive ? (name === 'ai' ? 'flex' : 'block') : 'none';
+    });
+    if (name === 'snippets') loadSnippets();
+    if (name === 'sessions') loadHostSessions();
+    activePanel = name;
+}
+
+function loadSnippets() {
+    fetch('/api/snippets', { headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json())
+    .then(data => {
+        const c = document.getElementById('snippetsList');
+        if (!Object.keys(data).length) {
+            c.innerHTML = '<div class="text-center text-muted" style="padding:2rem"><span class="mi" style="font-size:32px">library_books</span><p style="margin-top:0.5rem">No commands</p></div>';
+            return;
+        }
+        let h = '';
+        for (const [cat, items] of Object.entries(data)) {
+            h += `<div class="snippet-category"><div class="snippet-category-title"><span class="mi mi-sm">folder</span> ${cat}</div>`;
+            for (const s of items) {
+                const esc = s.command.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+                h += `<div class="snippet-item" onclick="executeInTerminal('${esc}')">
+                    <div class="snippet-item-content"><div class="snippet-item-title">${escHtml(s.title)}</div>
+                    <div class="snippet-item-cmd">${escHtml(s.command)}</div>
+                    ${s.description ? `<div class="snippet-item-desc">${escHtml(s.description)}</div>` : ''}</div>
+                    <span class="mi mi-sm paste-btn">play_arrow</span></div>`;
+            }
+            h += '</div>';
+        }
+        c.innerHTML = h;
+    });
+}
+function toggleSnippetForm() { document.getElementById('snippetForm').classList.toggle('hidden'); }
+function saveSnippet() {
+    const d = {
+        category: document.getElementById('snipCategory').value || 'Custom',
+        title: document.getElementById('snipTitle').value,
+        command: document.getElementById('snipCommand').value,
+        description: document.getElementById('snipDesc').value
+    };
+    if (!d.title || !d.command) return alert('Title and command are required');
+    fetch('/api/snippets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(d)
+    })
+    .then(r => {
+        if (r.ok) {
+            loadSnippets();
+            toggleSnippetForm();
+            ['snipTitle', 'snipCommand', 'snipDesc'].forEach(id => document.getElementById(id).value = '');
+        }
+    });
+}
+
+let sessionDetailOpen = false;
+function loadHostSessions() {
+    if (sessionDetailOpen) return;
+    fetch(`/api/sessions?host_id=${HOST_ID}`, { headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json())
+    .then(sessions => {
+        const c = document.getElementById('sessionsList');
+        if (!sessions.length) {
+            c.innerHTML = '<div class="text-center text-muted" style="padding:2rem"><span class="mi" style="font-size:32px">history</span><p style="margin-top:0.5rem">No sessions</p></div>';
+            return;
+        }
+        let h = '';
+        for (const s of sessions) {
+            const date = s.started_at ? new Date(s.started_at).toLocaleString('en-US') : '?';
+            const dur = s.duration ? `${Math.floor(s.duration / 60)}:${String(s.duration % 60).padStart(2, '0')}` : '–';
+            const isCurrent = s.id === currentRecordingId;
+            const icons = { completed: 'check_circle', active: 'radio_button_checked', reconnected: 'link', interrupted: 'pause_circle', error: 'error' };
+            h += `<div class="session-item" onclick="viewSessionDetail(${s.id})" style="${isCurrent ? 'border:1px solid var(--green-primary);border-radius:var(--radius)' : ''}">
+                <div class="session-icon ${s.status}"><span class="mi">${icons[s.status] || 'help'}</span></div>
+                <div class="session-info"><div class="session-info-title">${date} ${isCurrent ? '<span style="color:var(--green-primary)">(Current)</span>' : ''}</div>
+                <div class="session-info-meta"><span>${dur} min</span><span style="text-transform:capitalize">${s.status}</span></div></div>
+                <span class="session-cmds">${s.command_count} cmds</span></div>`;
+        }
+        c.innerHTML = h;
+    });
+}
+function viewSessionDetail(id) {
+    sessionDetailOpen = true;
+    fetch(`/api/sessions/${id}`, { headers: { 'X-CSRFToken': CSRF } })
+    .then(r => r.json())
+    .then(s => {
+        let h = `<div style="margin-bottom:1rem;padding:0.75rem;background:var(--bg-tertiary);border-radius:var(--radius)">
+            <strong>${escHtml(s.host_name)}</strong> – ${s.started_at ? new Date(s.started_at).toLocaleString('en-US') : '?'}
+            <br><span class="text-muted" style="font-size:0.75rem">Duration: ${Math.floor(s.duration / 60)}:${String(s.duration % 60).padStart(2, '0')} min | Status: ${s.status}</span></div>`;
+        h += '<div class="section-title" style="font-size:0.6875rem"><span class="mi mi-sm">terminal</span> Commands</div>';
+        if (s.commands.length) {
+            for (const c of s.commands) {
+                const t = c.ts ? new Date(c.ts).toLocaleTimeString('en-US') : '';
+                const esc = c.cmd.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+                h += `<div class="session-cmd-item" onclick="pasteToTerminal('${esc}')" style="cursor:pointer" title="Click: paste into terminal">
+                    <span class="cmd-time">${t}</span><span class="cmd-text">$ ${escHtml(c.cmd)}</span>
+                    <span class="mi mi-sm" style="color:var(--green-primary);opacity:0.5">content_paste_go</span></div>`;
+            }
+        } else { h += '<div class="text-muted" style="padding:0.5rem;font-size:0.75rem">No commands</div>'; }
+        h += `<div style="margin-top:1rem"><button onclick="backToSessionList()" class="btn btn-secondary btn-sm btn-block"><span class="mi mi-sm">arrow_back</span> Back</button></div>`;
+        document.getElementById('sessionsList').innerHTML = h;
+    });
+}
+function backToSessionList() { sessionDetailOpen = false; loadHostSessions(); }
+
+let aiMessages = [];
+let aiCommandBuffer = [];
+
+function sendAI() {
+    const input = document.getElementById('aiInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    input.style.height = '40px';
+    
+    aiMessages.push({ role: 'user', content: msg });
+    appendAIMessage('user', msg);
+    showAITyping();
+    
+    fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ 
+            messages: aiMessages,
+            recording_id: currentRecordingId
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        hideAITyping();
+        if (data.error) {
+            appendAIMessage('assistant', `⚠️ ${data.error}`);
+        } else {
+            let content = data.content || data.text || data.response || data.message || String(data);
+            aiMessages.push({ role: 'assistant', content: content });
+            appendAIMessage('assistant', content);
+        }
+    })
+    .catch(err => {
+        hideAITyping();
+        appendAIMessage('assistant', `⚠️ ${err.message}`);
+    });
+}
+
+function appendAIMessage(role, content) {
+    const c = document.getElementById('aiMessages');
+    const d = document.createElement('div');
+    d.className = `ai-message ${role}`;
+    
+    if (role === 'user') {
+        d.textContent = content;
+    } else {
+        d.innerHTML = formatAI(content);
+    }
+    c.appendChild(d);
+    c.scrollTop = c.scrollHeight;
+}
+
+function formatAI(text) {
+    if (!text) return '';
+    let html = marked.parse(text);
+    
+    html = html.replace(/<pre><code(?: class="language-(\w*)")?>([\s\S]*?)<\/code><\/pre>/g, (match, lang, code) => {
+        const decodedCode = code.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+        const cmdIndex = aiCommandBuffer.length;
+        aiCommandBuffer.push(decodedCode);
+        return `<pre><code>${code}</code><button class="ai-code-paste" onclick="pasteAICommand(${cmdIndex})"><span class="mi" style="font-size:12px">content_paste</span> Paste</button></pre>`;
+    });
+    
+    html = html.replace(/<code>(.*?)<\/code>/g, (match, code) => {
+        const decodedCode = code.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+        const cmdIndex = aiCommandBuffer.length;
+        aiCommandBuffer.push(decodedCode);
+        return `<code class="clickable-cmd" onclick="pasteAICommand(${cmdIndex})" title="Click: paste into terminal">${code}</code>`;
+    });
+    
+    return html;
+}
+
+function pasteAICommand(index) {
+    if (index >= 0 && index < aiCommandBuffer.length) {
+        pasteToTerminal(aiCommandBuffer[index]);
+    }
+}
+
+function showAITyping() {
+    const c = document.getElementById('aiMessages');
+    const d = document.createElement('div');
+    d.className = 'ai-typing';
+    d.id = 'aiTyping';
+    d.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div><span>AI is thinking...</span>';
+    c.appendChild(d);
+    c.scrollTop = c.scrollHeight;
+    document.getElementById('aiSendBtn').disabled = true;
+}
+function hideAITyping() {
+    document.getElementById('aiTyping')?.remove();
+    document.getElementById('aiSendBtn').disabled = false;
+}
+function escHtml(t) {
+    if (!t) return '';
+    const d = document.createElement('div');
+    d.textContent = t;
+    return d.innerHTML;
+}
+
+const aiInput = document.getElementById('aiInput');
+aiInput.addEventListener('input', function() {
+    this.style.height = '40px';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Sign In – SSH Vault{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/login.css">
+<div class="auth-wrapper">
+    <div class="wave wave-1"></div>
+    <div class="wave wave-2"></div>
+    <div class="wave wave-3"></div>
+    <div class="auth-card">
+        <div class="auth-logo">
+            <img src="{{ url_for('static', filename='img/logo.jpg') }}" alt="Logo">
+        </div>
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="auth-subtitle">Sign in to access your SSH hosts</p>
+
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                <label class="form-label" for="username">Username</label>
+                {{ form.username(class="form-control", id="username", placeholder="your_username", autocomplete="username") }}
+                {% for e in form.username.errors %}<div class="form-error">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="password">Password</label>
+                {{ form.password(class="form-control", id="password", placeholder="••••••••••••", autocomplete="current-password") }}
+                {% for e in form.password.errors %}<div class="form-error">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="form-group">
+                <div class="form-check">
+                    {{ form.remember(id="remember") }}
+                    <label for="remember">Stay signed in</label>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">
+                <span class="mi mi-sm">login</span> Sign in
+            </button>
+            {% if registration_open %}
+            <p class="text-center mt-2" style="font-size:0.875rem">
+                Don't have an account yet? <a href="{{ url_for('register') }}">Register</a>
+            </p>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}

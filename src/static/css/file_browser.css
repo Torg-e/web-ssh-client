@@ -1,0 +1,45 @@
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.page-title span { color: var(--green-primary); }
+
+.sessions-table { width: 100%; border-collapse: collapse; }
+
+.sessions-table th, .sessions-table td {
+    padding: 0.625rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sessions-table th {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.sessions-table td { font-size: 0.8125rem; }
+.sessions-table tr:hover td { background: var(--bg-hover); cursor: pointer; }
+
+.sessions-table td a.btn-ghost {
+    opacity: 0.5;
+    transition: var(--transition);
+}
+
+.sessions-table tr:hover td a.btn-ghost,
+.sessions-table tr:hover td button.btn-ghost {
+    opacity: 1;
+}

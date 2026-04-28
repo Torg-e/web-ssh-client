@@ -1,0 +1,97 @@
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.page-title span { color: var(--green-primary); }
+
+.bulk-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    background: var(--bg-hover);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.bulk-actions-bar #selectedCount {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.sessions-table { width: 100%; border-collapse: collapse; }
+
+.sessions-table th, .sessions-table td {
+    padding: 0.625rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sessions-table th {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.sessions-table td { font-size: 0.8125rem; }
+.sessions-table tr:hover td { background: var(--bg-hover); cursor: pointer; }
+
+.sessions-table td a.btn-ghost {
+    opacity: 0.5;
+    transition: var(--transition);
+}
+
+.sessions-table tr:hover td a.btn-ghost,
+.sessions-table tr:hover td button.btn-ghost {
+    opacity: 1;
+}
+
+.sessions-table tr td:last-child {
+    white-space: nowrap;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.status-dot.completed { background: var(--green-primary); }
+
+.status-dot.active { 
+    background: #ecc94b; 
+    animation: recPulse 1.5s infinite; 
+}
+
+.status-dot.interrupted { background: #ecc94b; }
+
+.status-dot.error { background: var(--danger); }
+
+@keyframes recPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+}
+
+.empty-state .mi { font-size: 48px; margin-bottom: 1rem; opacity: 0.5; }
+.empty-state h3 { color: var(--text-secondary); margin-bottom: 0.5rem; }
+.empty-state p { margin-bottom: 1.5rem; }

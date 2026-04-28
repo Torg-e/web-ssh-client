@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Files – {{ host.name }} – SSH Vault{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/static/css/file_browser.css">
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">
+            <span class="mi mi-lg" style="color:var(--green-primary)">folder_open</span>
+            Files: <span>{{ host.name }}</span>
+        </h1>
+        <div class="page-actions">
+            <a href="{{ url_for('terminal', host_id=host.id) }}" target="_blank" class="btn btn-secondary"><span class="mi mi-sm">terminal</span> Terminal</a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary"><span class="mi mi-sm">arrow_back</span> Dashboard</a>
+        </div>
+    </div>
+
+    <div class="card mb-2" style="padding:0.75rem 1.25rem">
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+            <span class="mi mi-sm" style="color:var(--text-muted)">folder</span>
+            <div id="breadcrumb" style="font-family:var(--font-mono);font-size:0.8125rem;flex:1;display:flex;align-items:center;gap:2px;overflow-x:auto"></div>
+            <div class="btn-group">
+                <button onclick="doUpload()" class="btn btn-primary btn-sm"><span class="mi mi-sm">upload_file</span> Upload</button>
+                <button onclick="doMkdir()" class="btn btn-secondary btn-sm"><span class="mi mi-sm">create_new_folder</span> Folder</button>
+                <button onclick="loadDir(currentPath)" class="btn btn-ghost btn-sm"><span class="mi mi-sm">refresh</span></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+        <table class="sessions-table" id="fileTable">
+            <thead>
+                <tr>
+                    <th style="width:30px"></th>
+                    <th>Name</th>
+                    <th style="width:100px">Size</th>
+                    <th style="width:100px">Permissions</th>
+                    <th style="width:160px">Modified</th>
+                    <th style="width:120px"></th>
+                </tr>
+            </thead>
+            <tbody id="fileList">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:3rem"><span class="mi" style="font-size:32px">hourglass_empty</span><br>Loading files...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<input type="file" id="uploadInput" multiple style="display:none" onchange="handleUpload(this)">
+{% endblock %}
+
+{% block scripts %}
+<script>
+const HOST_ID = {{ host.id }};
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+let currentPath = '/';
+
+function loadDir(path) {
+    currentPath = path;
+    updateBreadcrumb(path);
+    document.getElementById('fileList').innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem"><span class="mi">hourglass_empty</span> Loading...</td></tr>';
+
+    fetch(`/api/sftp/${HOST_ID}/ls?path=${encodeURIComponent(path)}`, { headers: {'X-CSRFToken': CSRF} })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            document.getElementById('fileList').innerHTML = `<tr><td colspan="6" class="text-center" style="padding:2rem;color:var(--danger)">${esc(data.error)}</td></tr>`;
+            return;
+        }
+        let h = '';
+        if (path !== '/') {
+            const parent = path.split('/').slice(0, -1).join('/') || '/';
+            h += `<tr onclick="loadDir('${parent}')" style="cursor:pointer"><td><span class="mi mi-sm" style="color:var(--info)">folder_open</span></td><td style="font-weight:600">..</td><td></td><td></td><td></td><td></td></tr>`;
+        }
+        for (const f of data.entries) {
+            const icon = f.is_dir ? 'folder' : getFileIcon(f.name);
+            const iconColor = f.is_dir ? 'var(--info)' : 'var(--text-muted)';
+            const size = f.is_dir ? '–' : formatSize(f.size);
+            const mod = f.modified ? new Date(f.modified).toLocaleString('en-US') : '';
+            const clickAction = f.is_dir ? `onclick="loadDir('${esc(f.path)}')" style="cursor:pointer"` : '';
+            h += `<tr ${clickAction}>
+                <td><span class="mi mi-sm" style="color:${iconColor}">${icon}</span></td>
+                <td style="font-family:var(--font-mono);font-size:0.8125rem">${esc(f.name)}</td>
+                <td style="font-size:0.75rem;color:var(--text-muted)">${size}</td>
+                <td style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted)">${f.permissions}</td>
+                <td style="font-size:0.75rem;color:var(--text-muted)">${mod}</td>
+                <td>
+                    <div class="btn-group" style="justify-content:flex-end">
+                        ${!f.is_dir ? `<a href="/api/sftp/${HOST_ID}/download?path=${encodeURIComponent(f.path)}" class="btn btn-ghost btn-xs" title="Download"><span class="mi mi-sm">download</span></a>` : ''}
+                        <button onclick="event.stopPropagation();doRename('${esc(f.path)}','${esc(f.name)}')" class="btn btn-ghost btn-xs" title="Rename"><span class="mi mi-sm">edit</span></button>
+                        <button onclick="event.stopPropagation();doDelete('${esc(f.path)}',${f.is_dir},'${esc(f.name)}')" class="btn btn-ghost btn-xs" title="Delete" style="color:var(--danger)"><span class="mi mi-sm">delete</span></button>
+                    </div>
+                </td>
+            </tr>`;
+        }
+        if (!data.entries.length && path === '/') h += '<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Directory is empty</td></tr>';
+        document.getElementById('fileList').innerHTML = h;
+    })
+    .catch(err => {
+        document.getElementById('fileList').innerHTML = `<tr><td colspan="6" class="text-center" style="padding:2rem;color:var(--danger)">${err.message}</td></tr>`;
+    });
+}
+
+function updateBreadcrumb(path) {
+    const parts = path.split('/').filter(Boolean);
+    let h = `<a href="javascript:loadDir('/')" style="padding:0.25rem 0.5rem;border-radius:4px;background:var(--bg-tertiary)">/</a>`;
+    let acc = '';
+    for (const p of parts) {
+        acc += '/' + p;
+        const a = acc;
+        h += `<span style="color:var(--text-muted)">/</span><a href="javascript:loadDir('${a}')" style="padding:0.25rem 0.5rem;border-radius:4px">${p}</a>`;
+    }
+    document.getElementById('breadcrumb').innerHTML = h;
+}
+
+function doUpload() { document.getElementById('uploadInput').click(); }
+
+async function handleUpload(input) {
+    for (const file of input.files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('path', currentPath);
+        fd.append('csrf_token', CSRF);
+        try {
+            const resp = await fetch(`/api/sftp/${HOST_ID}/upload`, { method:'POST', headers:{'X-CSRFToken':CSRF}, body: fd });
+            const data = await resp.json();
+            if (data.error) alert('Error: ' + data.error);
+        } catch(e) { alert('Upload failed: ' + e.message); }
+    }
+    input.value = '';
+    loadDir(currentPath);
+}
+
+function doMkdir() {
+    const name = prompt('New folder name:');
+    if (!name) return;
+    const path = (currentPath === '/' ? '/' : currentPath + '/') + name;
+    fetch(`/api/sftp/${HOST_ID}/mkdir`, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body:JSON.stringify({path}) })
+    .then(r => r.json()).then(d => { if(d.error) alert(d.error); loadDir(currentPath); });
+}
+
+function doDelete(path, isDir, name) {
+    if (!confirm(`Really delete "${name}"?`)) return;
+    fetch(`/api/sftp/${HOST_ID}/delete`, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body:JSON.stringify({path, is_dir: isDir}) })
+    .then(r => r.json()).then(d => { if(d.error) alert(d.error); loadDir(currentPath); });
+}
+
+function doRename(oldPath, oldName) {
+    const newName = prompt('New name:', oldName);
+    if (!newName || newName === oldName) return;
+    const dir = oldPath.substring(0, oldPath.lastIndexOf('/')) || '/';
+    const newPath = dir + '/' + newName;
+    fetch(`/api/sftp/${HOST_ID}/rename`, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body:JSON.stringify({old_path: oldPath, new_path: newPath}) })
+    .then(r => r.json()).then(d => { if(d.error) alert(d.error); loadDir(currentPath); });
+}
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes/1048576).toFixed(1) + ' MB';
+    return (bytes/1073741824).toFixed(2) + ' GB';
+}
+
+function getFileIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const icons = {py:'code',js:'javascript',ts:'javascript',html:'html',css:'css',json:'data_object',yml:'settings',yaml:'settings',toml:'settings',ini:'settings',conf:'settings',cfg:'settings',sh:'terminal',bash:'terminal',zsh:'terminal',md:'description',txt:'description',log:'receipt_long',sql:'storage',db:'storage',jpg:'image',jpeg:'image',png:'image',gif:'image',svg:'image',mp4:'movie',mp3:'music_note',zip:'folder_zip',tar:'folder_zip',gz:'folder_zip'};
+    return icons[ext] || 'description';
+}
+
+function esc(t) { if(!t)return''; const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+
+loadDir('/');
+</script>
+{% endblock %}

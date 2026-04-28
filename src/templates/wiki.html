@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wiki – SSH Vault</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='img/icon-logo.png') }}">
+    <link rel="stylesheet" href="/static/css/global.css">
+    <link rel="stylesheet" href="/static/css/wiki.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+<div class="wiki-header">
+    <a href="/" class="btn btn-ghost" id="backBtn">
+        <span class="mi mi-sm">arrow_back</span> Back
+    </a>
+    <div style="display:flex;align-items:center;gap:8px;font-weight:600;color:var(--text-primary)">
+        <span class="mi" style="color:var(--green-primary)">auto_stories</span> SSH Vault Wiki
+    </div>
+    <div style="width:100px"></div>
+</div>
+
+<div class="wiki-layout">
+    <div class="wiki-sidebar">
+        <div class="wiki-sidebar-header">
+            <h3 style="margin:0;font-size:0.9375rem">Documents</h3>
+            <button onclick="newPage()" class="btn btn-primary btn-sm"><span class="mi mi-sm">add</span></button>
+        </div>
+        <div class="wiki-list" id="wikiList">
+            {% for p in pages %}
+            <div class="wiki-list-item {% if p.id == highlight_id %}active{% endif %}" data-id="{{ p.id }}" onclick="loadPage({{ p.id }})">
+                <span class="wiki-list-title">{{ p.title }}</span>
+                <span class="wiki-list-meta">{{ p.updated_at.strftime('%d %b %Y %H:%M') }}</span>
+            </div>
+            {% endfor %}
+            {% if not pages %}
+            <div class="text-muted" style="padding:1rem;font-size:0.8125rem">No pages yet.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="wiki-main" id="wikiMain" style="display:none">
+        <div id="wikiView" style="display:none;flex-direction:column;height:100%">
+            <div class="wiki-toolbar">
+                <h2 id="viewTitle" style="margin:0;font-size:1.5rem;font-weight:700;flex:1;color:var(--text-primary)">Page title</h2>
+                <div class="btn-group">
+                    <button onclick="switchToEditMode()" class="btn btn-primary btn-sm"><span class="mi mi-sm">edit</span> Edit</button>
+                    <button onclick="downloadPage()" class="btn btn-secondary btn-sm"><span class="mi mi-sm">download</span></button>
+                    <button onclick="deletePage()" class="btn btn-danger btn-sm"><span class="mi mi-sm">delete</span></button>
+                </div>
+            </div>
+            <div id="viewContent" class="wiki-view-content">
+            </div>
+        </div>
+
+        <div id="wikiEditorView" style="display:none;flex-direction:column;height:100%">
+            <div class="wiki-toolbar">
+                <input type="text" id="pageTitle" class="wiki-title-input" placeholder="Page title...">
+                <div class="btn-group">
+                    <button onclick="savePage()" class="btn btn-primary btn-sm" id="saveBtn"><span class="mi mi-sm">save</span> Save</button>
+                    <button onclick="downloadPage()" class="btn btn-secondary btn-sm"><span class="mi mi-sm">download</span></button>
+                    <button onclick="deletePage()" class="btn btn-danger btn-sm"><span class="mi mi-sm">delete</span></button>
+                    <button onclick="togglePreview()" class="btn btn-secondary btn-sm" id="previewBtn"><span class="mi mi-sm">visibility</span> Preview</button>
+                    <button onclick="switchToViewMode()" class="btn btn-ghost btn-sm" title="Back to view"><span class="mi mi-sm">visibility_off</span></button>
+                </div>
+            </div>
+            
+            <div class="wiki-editor-container">
+                <textarea id="pageContent" class="wiki-editor" placeholder="Write markdown here..."></textarea>
+                <div id="previewPane" class="wiki-preview" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="wiki-empty" id="wikiEmpty">
+        <span class="mi" style="font-size:48px;opacity:0.5;color:var(--text-muted)">auto_stories</span>
+        <h3 style="color:var(--text-primary)">Wiki</h3>
+        <p class="text-muted">Select a page on the left or create a new document.</p>
+    </div>
+</div>
+
+<div id="confirmModal" class="modal-overlay" style="display:none">
+    <div class="modal-card" style="max-width:400px">
+        <div class="modal-header" style="justify-content:center">
+            <h3 class="modal-title"><span class="mi" style="color:var(--danger)">warning</span> Confirm</h3>
+        </div>
+        <div class="modal-body" style="text-align:center">
+            <p id="confirmMessage" style="font-size:0.9375rem">Are you sure?</p>
+        </div>
+        <div class="modal-footer" style="justify-content:center;gap:1rem">
+            <button onclick="closeConfirmModal()" class="btn btn-secondary btn-sm">Cancel</button>
+            <button id="confirmBtn" class="btn btn-danger btn-sm">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div id="unsavedModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;z-index:2000;backdrop-filter:blur(4px)">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-lg);width:100%;max-width:400px;box-shadow:var(--shadow)">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color)">
+            <h3 style="margin:0;font-size:1.125rem;font-weight:600;display:flex;align-items:center;gap:0.5rem"><span class="mi" style="color:var(--warning)">warning</span> Unsaved Changes</h3>
+            <button onclick="closeUnsavedModal()" class="btn btn-ghost btn-sm"><span class="mi mi-sm">close</span></button>
+        </div>
+        <div style="padding:1.5rem;color:var(--text-secondary)">
+            <p>Do you want to save the changes to this document before leaving?</p>
+        </div>
+        <div style="padding:1rem 1.5rem;border-top:1px solid var(--border-color);display:flex;justify-content:flex-end;gap:0.5rem">
+            <button onclick="discardAndLeave()" class="btn btn-danger btn-sm">Discard</button>
+            <button onclick="saveAndLeave()" class="btn btn-primary btn-sm">Save & Leave</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let confirmCallback = null;
+
+function showConfirm(message, callback) {
+    document.getElementById('confirmMessage').textContent = message;
+    confirmCallback = callback;
+    document.getElementById('confirmModal').style.display = 'flex';
+}
+
+function closeConfirmModal() {
+    document.getElementById('confirmModal').style.display = 'none';
+    confirmCallback = null;
+}
+
+document.getElementById('confirmBtn').addEventListener('click', () => {
+    if (confirmCallback) confirmCallback();
+    closeConfirmModal();
+});
+
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+let currentPageId = null;
+let isPreviewActive = false;
+let isDirty = false;
+let isEditing = false;
+const highlightId = {{ highlight_id if highlight_id else 'null' }};
+
+document.getElementById('pageContent')?.addEventListener('input', () => { 
+    isDirty = true; 
+    if (isPreviewActive) renderPreview();
+});
+document.getElementById('pageTitle')?.addEventListener('input', () => { isDirty = true; });
+
+document.getElementById('backBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (isDirty) {
+        document.getElementById('unsavedModal').style.display = 'flex';
+    } else {
+        window.location.href = '/';
+    }
+});
+
+function closeUnsavedModal() { document.getElementById('unsavedModal').style.display = 'none'; }
+function discardAndLeave() { window.location.href = '/'; }
+async function saveAndLeave() {
+    const title = document.getElementById('pageTitle').value;
+    const content = document.getElementById('pageContent').value;
+    try {
+        const resp = await fetch('/api/wiki/save', {
+            method: 'POST', headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+            body: JSON.stringify({ id: currentPageId, title, content })
+        });
+        const data = await resp.json();
+        if(data.success) { isDirty = false; window.location.href = '/'; }
+        else { alert('Error saving: ' + (data.error || 'Unknown')); }
+    } catch(e) { alert('Network error'); }
+}
+
+function newPage() {
+    currentPageId = null;
+    isDirty = false;
+    document.getElementById('pageTitle').value = 'New Document';
+    document.getElementById('pageContent').value = '';
+    document.getElementById('wikiMain').style.display = 'flex';
+    document.getElementById('wikiEmpty').style.display = 'none';
+    document.querySelectorAll('.wiki-list-item').forEach(el => el.classList.remove('active'));
+    switchToEditMode();
+}
+
+async function loadPage(id) {
+    if (isDirty && !confirm('Discard current changes?')) return;
+    
+    try {
+        const resp = await fetch(`/api/wiki/${id}`, { headers: {'X-CSRFToken': CSRF} });
+        if(resp.ok) {
+            const data = await resp.json();
+            currentPageId = id;
+            isDirty = false;
+            document.getElementById('pageTitle').value = data.title;
+            document.getElementById('pageContent').value = data.content;
+            document.getElementById('wikiMain').style.display = 'flex';
+            document.getElementById('wikiEmpty').style.display = 'none';
+            
+            document.querySelectorAll('.wiki-list-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.id == id);
+            });
+            
+            switchToViewMode();
+        }
+    } catch(e) {
+        alert('Could not load page.');
+    }
+}
+
+function switchToViewMode() {
+    isEditing = false;
+    document.getElementById('wikiView').style.display = 'flex';
+    document.getElementById('wikiEditorView').style.display = 'none';
+    renderViewContent(document.getElementById('pageTitle').value, document.getElementById('pageContent').value);
+}
+
+function switchToEditMode() {
+    isEditing = true;
+    document.getElementById('wikiView').style.display = 'none';
+    document.getElementById('wikiEditorView').style.display = 'flex';
+    if(isPreviewActive) renderPreview();
+    document.getElementById('pageContent').focus();
+}
+
+function renderViewContent(title, content) {
+    document.getElementById('viewTitle').textContent = title;
+    document.getElementById('viewContent').innerHTML = marked.parse(content);
+}
+
+async function savePage() {
+    const title = document.getElementById('pageTitle').value;
+    const content = document.getElementById('pageContent').value;
+    
+    try {
+        const resp = await fetch('/api/wiki/save', {
+            method: 'POST', headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+            body: JSON.stringify({ id: currentPageId, title, content })
+        });
+        const data = await resp.json();
+        
+        if(data.success) {
+            isDirty = false;
+            currentPageId = data.id;
+            const btn = document.getElementById('saveBtn');
+            btn.innerHTML = '<span class="mi mi-sm">check_circle</span> Saved';
+            
+            setTimeout(() => { window.location.href = `/wiki?highlight_id=${currentPageId}`; }, 500);
+        } else {
+            alert('Error saving: ' + (data.error || 'Unknown'));
+        }
+    } catch(e) { alert('Error saving'); }
+}
+
+async function deletePage() {
+    if(!currentPageId) {
+        alert('No page selected to delete.');
+        return;
+    }
+    showConfirm('Permanently delete page?', async () => {
+        try {
+            const resp = await fetch(`/api/wiki/${currentPageId}`, {
+                method: 'DELETE',
+                headers: {'X-CSRFToken': CSRF}
+            });
+            
+            if (resp.ok) {
+                isDirty = false;
+                window.location.href = '/wiki';
+            } else {
+                let errorMsg = `Error: Status ${resp.status}`;
+                try {
+                    const data = await resp.json();
+                    errorMsg = data.error || errorMsg;
+                } catch (e) {
+                    errorMsg = `Server error (Status ${resp.status}). Please check the console (F12) and the app.py logs.`;
+                }
+                alert(errorMsg);
+            }
+        } catch (e) {
+            alert('Network error: ' + e.message);
+        }
+    });
+}
+
+function downloadPage() {
+    if(currentPageId) window.open(`/api/wiki/${currentPageId}/download`, '_blank');
+}
+
+function togglePreview() {
+    isPreviewActive = !isPreviewActive;
+    const pane = document.getElementById('previewPane');
+    const editor = document.getElementById('pageContent');
+    const btn = document.getElementById('previewBtn');
+    
+    if(isPreviewActive) {
+        pane.style.display = 'block';
+        editor.style.width = '50%';
+        btn.innerHTML = '<span class="mi mi-sm">edit</span> Editor';
+        renderPreview();
+    } else {
+        pane.style.display = 'none';
+        editor.style.width = '100%';
+        btn.innerHTML = '<span class="mi mi-sm">visibility</span> Preview';
+    }
+}
+
+function renderPreview() {
+    const md = document.getElementById('pageContent').value;
+    document.getElementById('previewPane').innerHTML = marked.parse(md);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (highlightId) {
+        loadPage(highlightId);
+    }
+});
+</script>
+</body>
+</html>

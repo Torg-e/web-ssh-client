@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block title %}Sessions – SSH Vault{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/sessions.css">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">
+            <span class="mi mi-lg" style="color:var(--green-primary)">history</span>
+            Session <span>Recordings</span>
+        </h1>
+    </div>
+
+    {% if sessions %}
+    <div class="card" style="padding:0;overflow:hidden">
+        <div id="bulkActionsBar" class="bulk-actions-bar" style="display:none">
+            <span class="mi mi-sm" style="color:var(--green-primary)">checklist</span>
+            <span id="selectedCount">0 selected</span>
+            <button onclick="deleteSelected()" class="btn btn-danger btn-sm">
+                <span class="mi mi-sm">delete</span> Delete selected
+            </button>
+        </div>
+
+        <table class="sessions-table">
+            <thead>
+                <tr>
+                    <th style="width:40px;padding-left:1.5rem">
+                        <input type="checkbox" id="selectAll" title="Select all" style="accent-color:var(--green-primary);cursor:pointer">
+                    </th>
+                    <th>Status</th>
+                    <th>Host</th>
+                    <th>Started</th>
+                    <th>Duration</th>
+                    <th>Commands</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="sessionsTableBody">
+                {% for s in sessions %}
+                <tr class="session-row" data-id="{{ s.id }}">
+                    <td style="padding-left:1.5rem" onclick="event.stopPropagation()">
+                        <input type="checkbox" class="session-check" data-id="{{ s.id }}" style="accent-color:var(--green-primary);cursor:pointer">
+                    </td>
+                    <td><span class="status-dot {{ s.status }}"></span>{{ s.status | capitalize }}</td>
+                    <td style="font-weight:600">{{ s.host.name if s.host else 'Deleted' }}</td>
+                    <td style="color:var(--text-muted)">{{ s.started_at.strftime('%d %b %Y %H:%M:%S') }}</td>
+                    <td>
+                        {% if s.duration_seconds %}
+                            {{ '%d:%02d' % (s.duration_seconds // 60, s.duration_seconds % 60) }} min
+                        {% else %}–{% endif %}
+                    </td>
+                    <td><span class="session-cmds">{{ s.commands | length }}</span></td>
+                    <td onclick="event.stopPropagation()" style="white-space:nowrap">
+                        <button onclick="aiExport({{ s.id }}, this)" class="btn btn-ghost btn-xs" title="Create AI documentation">
+                            <span class="mi mi-sm">auto_awesome</span>
+                        </button>
+                        <button onclick="deleteSession({{ s.id }}, this)" class="btn btn-ghost btn-xs" title="Delete" style="color:var(--danger)">
+                            <span class="mi mi-sm">delete</span>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <span class="mi" style="font-size:48px">history</span>
+        <h3>No sessions yet</h3>
+        <p>Session recordings are created automatically when you connect to a host</p>
+    </div>
+    {% endif %}
+</div>
+
+<div id="sessionModal" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:rgba(0,0,0,0.7)">
+    <div class="card" style="width:90%;max-width:900px;max-height:90vh;overflow-y:auto">
+        <div class="card-header" style="justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:0.75rem">
+                <span class="mi" style="color:var(--green-primary)">receipt_long</span>
+                <h2 class="card-title" id="sessionTitle">Session Details</h2>
+            </div>
+            <button onclick="closeSessionModal()" class="btn btn-ghost"><span class="mi">close</span></button>
+        </div>
+        <div style="display:grid;grid-template-columns:auto auto auto;gap:1.5rem;margin-bottom:1.5rem">
+            <div><span class="form-label">Time</span><div id="sDuration" style="font-size:0.875rem"></div></div>
+            <div><span class="form-label">Status</span><div id="sStatus" style="font-size:0.875rem"></div></div>
+            <div><span class="form-label">Commands</span><div id="sCmdCount" style="font-size:0.875rem"></div></div>
+        </div>
+        <div class="section-title"><span class="mi">terminal</span> Commands</div>
+        <div id="sCmdList" style="margin-bottom:1.5rem;max-height:300px;overflow-y:auto"></div>
+        <div class="section-title"><span class="mi">description</span> Terminal Output</div>
+        <div class="session-log-viewer" id="sOutput"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+const selectAllCb = document.getElementById('selectAll');
+const bulkBar = document.getElementById('bulkActionsBar');
+const countSpan = document.getElementById('selectedCount');
+const checkboxes = document.querySelectorAll('.session-check');
+
+if (selectAllCb) {
+    selectAllCb.addEventListener('change', (e) => {
+        checkboxes.forEach(cb => cb.checked = e.target.checked);
+        updateBulkBar();
+    });
+}
+
+checkboxes.forEach(cb => cb.addEventListener('change', () => {
+    updateBulkBar();
+    if (checkboxes.length > 0) {
+        selectAllCb.checked = Array.from(checkboxes).every(c => c.checked);
+    }
+}));
+
+function updateBulkBar() {
+    const selected = document.querySelectorAll('.session-check:checked').length;
+    countSpan.textContent = `${selected} selected`;
+    bulkBar.style.display = selected > 0 ? 'flex' : 'none';
+}
+
+async function deleteSelected() {
+    const checked = document.querySelectorAll('.session-check:checked');
+    const ids = Array.from(checked).map(cb => parseInt(cb.dataset.id));
+    
+    if (ids.length === 0) return;
+    
+    showConfirm(`Permanently delete ${ids.length} sessions?`, async () => {
+        try {
+            const resp = await fetch('/api/sessions/bulk_delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+                body: JSON.stringify({ ids: ids })
+            });
+            
+            if (resp.ok) {
+                ids.forEach(id => {
+                    const row = document.querySelector(`tr[data-id="${id}"]`);
+                    if (row) row.remove();
+                });
+                updateBulkBar();
+                selectAllCb.checked = false;
+            } else {
+                const data = await resp.json();
+                showError(data.error || 'Error deleting');
+            }
+        } catch(e) {
+            showError('Network error during bulk delete');
+        }
+    });
+}
+
+async function aiExport(id, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="mi mi-sm" style="animation: recPulse 1s infinite">auto_awesome</span>';
+    
+    try {
+        const resp = await fetch(`/api/sessions/${id}/ai_export`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': CSRF}
+        });
+        const data = await resp.json();
+        
+        if (data.error) {
+            showError(data.error);
+        } else if (data.success && data.page_id) {
+            window.location.href = `/wiki?highlight=${data.page_id}`;
+        }
+    } catch(e) {
+        showError('Error generating documentation');
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<span class="mi mi-sm">auto_awesome</span>';
+}
+
+function downloadMarkdown(text, filename) {
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+}
+
+document.querySelectorAll('.session-row').forEach(row => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', (e) => {
+        if (e.target.closest('input[type="checkbox"]') || e.target.closest('button')) return;
+        viewSession(row.dataset.id);
+    });
+});
+
+async function viewSession(id) {
+    const resp = await fetch(`/api/sessions/${id}`, { headers: {'X-CSRFToken': CSRF} });
+    if (!resp.ok) { showError('Failed to load session'); return; }
+    const s = await resp.json();
+    
+    document.getElementById('sessionTitle').textContent = `Session: ${s.host_name}`;
+    document.getElementById('sDuration').textContent = `${s.started_at ? new Date(s.started_at).toLocaleString('en') : '?'} — ${Math.floor(s.duration/60)}:${String(s.duration%60).padStart(2,'0')} min`;
+    document.getElementById('sStatus').innerHTML = `<span class="status-dot ${s.status}"></span>${s.status}`;
+    document.getElementById('sCmdCount').textContent = s.commands.length;
+    
+    let cmdHtml = '';
+    for (const c of s.commands) {
+        const t = c.ts ? new Date(c.ts).toLocaleTimeString('en') : '';
+        cmdHtml += `<div class="session-cmd-item">
+            <span class="cmd-time">${t}</span>
+            <span class="cmd-text">$ ${escHtml(c.cmd)}</span>
+        </div>`;
+    }
+    document.getElementById('sCmdList').innerHTML = cmdHtml || '<div class="text-muted" style="padding:0.5rem">No commands recorded</div>';
+    document.getElementById('sOutput').textContent = s.output_log || '(no output)';
+    
+    const modal = document.getElementById('sessionModal');
+    modal.style.display = 'flex';
+}
+
+function closeSessionModal() {
+    document.getElementById('sessionModal').style.display = 'none';
+}
+
+function deleteSession(id, btn) {
+    showConfirm('Delete session?', async () => {
+        const resp = await fetch(`/api/sessions/${id}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': CSRF }
+        });
+        if (resp.ok) {
+            const row = btn.closest('tr');
+            if (row) row.remove();
+            closeSessionModal();
+            updateBulkBar();
+        } else {
+            const data = await resp.json().catch(() => ({}));
+            showError(data.error || 'Failed to delete');
+        }
+    });
+}
+
+function escHtml(t) {
+    return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+document.getElementById('sessionModal')?.addEventListener('click', e => {
+    if (e.target.id === 'sessionModal') closeSessionModal();
+});
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSessionModal();
+});
+</script>
+{% endblock %}

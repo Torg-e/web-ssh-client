@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}SSH Vault{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/icon-logo.png') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
+
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated and not request.path.startswith('/terminal') %}
+    <nav class="navbar">
+        <a href="{{ url_for('dashboard') }}" class="navbar-brand">
+            <div class="navbar-logo">
+                <img src="{{ url_for('static', filename='img/logo.jpg') }}" alt="Logo">
+            </div>
+            SSH Vault
+        </a>
+        <ul class="navbar-nav">
+            <li><a href="{{ url_for('dashboard') }}" class="nav-link"><span class="mi mi-sm">dashboard</span> Dashboard</a></li>
+            <li><a href="{{ url_for('ssh_keys_page') }}" class="nav-link"><span class="mi mi-sm">vpn_key</span> Keys</a></li>
+            <li><a href="{{ url_for('commands_page') }}" class="nav-link"><span class="mi mi-sm">menu_book</span> Commands</a></li>
+            <li><a href="{{ url_for('wiki') }}" class="nav-link"><span class="mi">auto_stories</span> Wiki</a></li>
+            <li><a href="{{ url_for('sessions_page') }}" class="nav-link"><span class="mi mi-sm">history</span> Sessions</a></li>
+            <li><a href="{{ url_for('terminal_styles') }}" class="nav-link"><span class="mi mi-sm">palette</span> Styles</a></li>
+            {% if current_user.is_admin %}
+            <li><a href="{{ url_for('admin_panel') }}" class="nav-link"><span class="mi mi-sm">admin_panel_settings</span> Admin</a></li>
+            {% endif %}
+            <li><a href="{{ url_for('logout') }}" class="nav-link"><span class="mi mi-sm">logout</span></a></li>
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div id="toast-container">
+        {% for category, message in messages %}
+        <div class="toast-msg toast-{{ category }}">
+            {% if category == 'success' %}<span class="mi mi-sm">check_circle</span>
+            {% elif category == 'danger' %}<span class="mi mi-sm">error</span>
+            {% elif category == 'warning' %}<span class="mi mi-sm">warning</span>
+            {% else %}<span class="mi mi-sm">info</span>{% endif %}
+            
+            <span style="flex:1">{{ message }}</span>
+            
+            <button class="btn btn-ghost btn-sm" onclick="closeToast(this.closest('.toast-msg'))">
+                <span class="mi mi-sm">close</span>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% if error %}
+    <div class="container"><div class="alert alert-danger"><span class="mi mi-sm">error</span> {{ error }}</div></div>
+    {% endif %}
+
+    <div id="errorModal" class="modal-overlay" style="display:none">
+        <div class="modal-card" style="max-width:400px">
+            <div class="modal-header" style="justify-content:center">
+                <h3 class="modal-title"><span class="mi" style="color:var(--danger)">error</span> Error</h3>
+            </div>
+            <div class="modal-body" style="text-align:center">
+                <p id="errorMessage" style="font-size:0.9375rem"></p>
+            </div>
+            <div class="modal-footer" style="justify-content:center">
+                <button onclick="closeErrorModal()" class="btn btn-primary btn-sm">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="modal-overlay" style="display:none">
+        <div class="modal-card" style="max-width:400px">
+            <div class="modal-header" style="justify-content:center">
+                <h3 class="modal-title"><span class="mi" style="color:var(--danger)">warning</span> Confirm</h3>
+            </div>
+            <div class="modal-body" style="text-align:center">
+                <p id="confirmMessage" style="font-size:0.9375rem">Are you sure?</p>
+            </div>
+            <div class="modal-footer" style="justify-content:center;gap:1rem">
+                <button onclick="closeConfirmModal()" class="btn btn-secondary btn-sm">Cancel</button>
+                <button id="confirmBtn" class="btn btn-danger btn-sm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    {% block content %}{% endblock %}
+    {% block scripts %}{% endblock %}
+</body>
+<script>
+    function closeToast(element) {
+        if (!element || element.classList.contains('toast-hide')) return;
+        element.classList.add('toast-hide');
+        
+        setTimeout(function() {
+            element.remove();
+        }, 500);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const toasts = document.querySelectorAll('.toast-msg');
+        
+        toasts.forEach(function(toast) {
+            setTimeout(function() {
+                closeToast(toast);
+            }, 5000);
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('dblclick', function(event) {
+            const card = event.target.closest('.host-card');
+            
+            if (card && !event.target.closest('a, button, form')) {
+                const terminalUrl = card.dataset.terminalUrl;
+                
+                if (terminalUrl) {
+                    window.open(terminalUrl, '_blank');
+                }
+            }
+        });
+    });
+
+    function showError(message) {
+        document.getElementById('errorMessage').textContent = message;
+        document.getElementById('errorModal').style.display = 'flex';
+    }
+
+    function closeErrorModal() {
+        document.getElementById('errorModal').style.display = 'none';
+    }
+
+    let confirmCallback = null;
+
+    function showConfirm(message, callback) {
+        document.getElementById('confirmMessage').textContent = message;
+        confirmCallback = callback;
+        document.getElementById('confirmModal').style.display = 'flex';
+    }
+
+    function closeConfirmModal() {
+        document.getElementById('confirmModal').style.display = 'none';
+        confirmCallback = null;
+    }
+
+    document.getElementById('confirmBtn').addEventListener('click', () => {
+        if (confirmCallback) confirmCallback();
+        closeConfirmModal();
+    });
+</script>
+</html>
