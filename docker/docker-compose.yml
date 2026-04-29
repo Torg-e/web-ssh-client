@@ -8,6 +8,8 @@ services:
     networks:
       - teashell
     restart: unless-stopped
+    volumes:
+      - teashell-data:/app/data
 
 networks:
   teashell:
