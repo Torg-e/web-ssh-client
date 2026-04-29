@@ -20,6 +20,8 @@
 
 ### Future ideas
 
+🔲 Different host card versions can be set: compact, normal, and large.
+
 🔲 Database editor for: MySQL/MariaDB, PostgreSQL, Microsoft SQL Server, MongoDB, SQLite
 
 🔲 Proxmox API integration to automatically adopt LXC containers
