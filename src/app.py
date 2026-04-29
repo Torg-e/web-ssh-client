@@ -44,11 +44,32 @@ from ssh_keygen import deploy_key_to_host, generate_key_pair, remove_key_from_ho
 app = Flask(__name__)
 app.config.from_object(Config)
 
-if Config.TRUSTED_PROXIES_COUNT > 0:
-    app.wsgi_app = ProxyFix(
+class IPBasedProxyFix:
+    def __init__(self, app, trusted_ips, proxy_count=1):
+        self.app = ProxyFix(
+            app,
+            x_for=proxy_count,
+            x_proto=proxy_count,
+            x_host=proxy_count,
+            x_port=proxy_count,
+            x_prefix=proxy_count
+        )
+        self.trusted_ips = set(trusted_ips)
+
+    def __call__(self, environ, start_response):
+        remote_addr = environ.get('REMOTE_ADDR', '')
+        if remote_addr not in self.trusted_ips:
+            for key in list(environ.keys()):
+                if key.startswith('HTTP_X_FORWARDED'):
+                    del environ[key]
+        return self.app(environ, start_response)
+
+trusted_ips = [ip.strip() for ip in Config.TRUSTED_PROXY_IPS.split(',') if ip.strip()]
+if trusted_ips and Config.TRUSTED_PROXIES_COUNT > 0:
+    app.wsgi_app = IPBasedProxyFix(
         app.wsgi_app,
-        x_for=Config.TRUSTED_PROXIES_COUNT,
-        x_proto=Config.TRUSTED_PROXIES_COUNT
+        trusted_ips,
+        proxy_count=Config.TRUSTED_PROXIES_COUNT
     )
 
 db.init_app(app)
