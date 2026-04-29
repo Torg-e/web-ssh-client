@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import time
+import gevent
 import paramiko
 from datetime import datetime, timezone
 from flask import (
@@ -1277,31 +1278,43 @@ def ssh_start(data):
             socketio.sleep(0)
         emit('replay_end', {})
         emit('output', {'data': '\r\n\x1b[1;36m--- History restored, new connection ---\x1b[0m\r\n\r\n'})
-    try:
-        transport, channel = _create_ssh_connection(
-            h_hostname, h_port, h_username, h_auth, h_pass, h_key, h_pp, cols, rows)
-        ssh_sessions[sid] = {
-            'channel': channel, 'transport': transport,
-            'recording_id': recording_id, 'user_id': user_id, 'host_id': host_id,
-            'cmd_buffer': '', 'output_buffer': '',
-            'output_size': 0, 'input_size': 0, 'last_flush': time.time()
-        }
-        recording_to_sid[recording_id] = sid
-        emit('output', {'data': f'\r\n\x1b[1;32m✓ Connected to {h_name} ({h_hostname})\x1b[0m\r\n\r\n'})
-        emit('recording_started', {'recording_id': recording_id})
-        ssh_sessions[sid]['thread'] = _start_reader_thread(sid, channel)
-    except paramiko.AuthenticationException:
-        emit('output', {'data': '\r\n\x1b[1;31m[ERROR] Authentication failed.\x1b[0m\r\n'})
-        with app.app_context():
-            rec = db.session.get(SessionRecording, recording_id)
-            if rec:
-                rec.status = 'error'; rec.ended_at = utcnow(); db.session.commit()
-    except Exception as e:
-        emit('output', {'data': f'\r\n\x1b[1;31m[ERROR] {e}\x1b[0m\r\n'})
-        with app.app_context():
-            rec = db.session.get(SessionRecording, recording_id)
-            if rec:
-                rec.status = 'error'; rec.ended_at = utcnow(); db.session.commit()
+
+    def _on_connect(g):
+        try:
+            transport, channel = g.get()
+            ssh_sessions[sid] = {
+                'channel': channel, 'transport': transport,
+                'recording_id': recording_id, 'user_id': user_id, 'host_id': host_id,
+                'cmd_buffer': '', 'output_buffer': '',
+                'output_size': 0, 'input_size': 0, 'last_flush': time.time()
+            }
+            recording_to_sid[recording_id] = sid
+            socketio.emit('output', {'data': f'\r\n\x1b[1;32m✓ Connected to {h_name} ({h_hostname})\x1b[0m\r\n\r\n'}, namespace='/ssh', to=sid)
+            socketio.emit('recording_started', {'recording_id': recording_id}, namespace='/ssh', to=sid)
+            ssh_sessions[sid]['thread'] = _start_reader_thread(sid, channel)
+        except paramiko.AuthenticationException:
+            socketio.emit('output', {'data': '\r\n\x1b[1;31m[ERROR] Authentication failed.\x1b[0m\r\n'}, namespace='/ssh', to=sid)
+            with app.app_context():
+                rec = db.session.get(SessionRecording, recording_id)
+                if rec:
+                    rec.status = 'error'
+                    rec.ended_at = utcnow()
+                    db.session.commit()
+        except Exception as e:
+            socketio.emit('output', {'data': f'\r\n\x1b[1;31m[ERROR] {e}\x1b[0m\r\n'}, namespace='/ssh', to=sid)
+            with app.app_context():
+                rec = db.session.get(SessionRecording, recording_id)
+                if rec:
+                    rec.status = 'error'
+                    rec.ended_at = utcnow()
+                    db.session.commit()
+
+    future = gevent.get_hub().threadpool.spawn(
+        _create_ssh_connection,
+        h_hostname, h_port, h_username, h_auth, h_pass, h_key, h_pp, cols, rows
+    )
+    future.rawlink(_on_connect)
+    emit('output', {'data': '\r\n\x1b[1;36mConnecting...\x1b[0m\r\n'})
 
 @socketio.on('input', namespace='/ssh')
 def ssh_input(data):
