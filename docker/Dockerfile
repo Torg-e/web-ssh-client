@@ -12,7 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 ENV PYTHONPATH=/app/src
 
-RUN chown -R teashell-user:teashell-user /app
+RUN chown -R root:root /app && chmod -R 755 /app
+RUN mkdir -p /app/data && chown teashell-user:teashell-user /app/data && chmod 700 /app/data
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
