@@ -41,6 +41,7 @@ class Config:
 
     _TRUSTED_PROXIES_COUNT = os.environ.get('TRUSTED_PROXIES_COUNT', '0')
     TRUSTED_PROXIES_COUNT = int(_TRUSTED_PROXIES_COUNT) if _TRUSTED_PROXIES_COUNT.isdigit() else 0
+    TRUSTED_PROXY_IPS = os.environ.get('TRUSTED_PROXY_IPS', '')
 
     _cors = os.environ.get('CORS_ALLOWED_ORIGINS', '')
     if _cors == '*':
