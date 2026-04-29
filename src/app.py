@@ -1097,10 +1097,13 @@ def delete_wiki_page(page_id):
 ##################################################################################################################################
 
 def _create_ssh_connection(hostname, port, username, auth_type, password, ssh_key, passphrase, cols, rows):
-    transport = paramiko.Transport((hostname, port))
-    transport.set_keepalive(30)
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     if auth_type == 'password':
-        transport.connect(username=username, password=password)
+        client.connect(
+            hostname, port=port, username=username, password=password,
+            timeout=10, banner_timeout=10, auth_timeout=10
+        )
     else:
         pkey = None
         pp = passphrase or None
@@ -1112,7 +1115,13 @@ def _create_ssh_connection(hostname, port, username, auth_type, password, ssh_ke
                 continue
         if pkey is None:
             raise ValueError("SSH key invalid")
-        transport.connect(username=username, pkey=pkey)
+        client.connect(
+            hostname, port=port, username=username, pkey=pkey,
+            timeout=10, banner_timeout=10, auth_timeout=10
+        )
+    transport = client.get_transport()
+    transport.set_keepalive(30)
+    transport._client = client
     channel = transport.open_session()
     channel.get_pty(term='xterm-256color', width=cols, height=rows)
     channel.invoke_shell()
