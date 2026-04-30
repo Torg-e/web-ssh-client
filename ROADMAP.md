@@ -19,7 +19,7 @@
 ✅ Session export to Markdown documentations using AI
 
 
-### Next Changes/Fixes
+### Currently working on changes/bug fixes
 
 - The command database will be fully customizable
 - Different host card versions can be set: compact, normal, and large.
