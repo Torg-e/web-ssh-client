@@ -18,9 +18,15 @@
 
 ✅ Session export to Markdown documentations using AI
 
+
+### Next Changes/Fixes
+
+- The command database will be fully customizable
+- Different host card versions can be set: compact, normal, and large.
+
 ### Future ideas
 
-🔲 Different host card versions can be set: compact, normal, and large.
+🔲 Function to export markdown documentation directly to BookStack or other documentation platforms
 
 🔲 Database editor for: MySQL/MariaDB, PostgreSQL, Microsoft SQL Server, MongoDB, SQLite
 
