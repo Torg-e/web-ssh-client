@@ -1,6 +1,21 @@
 # Teashell Web-ssh-client
 A modern-looking web SSH client focused on session recordings and built-in AI that compiles sessions into compact documentation. includes a wiki with a markdown editor to quickly create notes and documents, which can later be exported as Markdown and added to your documentation tools.
 
+
+- [Teashell Web-ssh-client](#teashell-web-ssh-client)
+- [Some Preview Pictures](#some-preview-pictures)
+  - [Login](#login)
+  - [Dashboard](#dashboard)
+  - [Styles](#styles)
+  - [Ai Settings](#ai-settings)
+- [TeaShell Docker Quickstart](#teashell-docker-quickstart)
+  - [Requirements](#requirements)
+  - [1. Environment](#1-environment)
+  - [2. docker-compose.yml](#2-docker-composeyml)
+  - [3. Start](#3-start)
+  - [4. First Login](#4-first-login)
+  - [5. Reverse Proxy](#5-reverse-proxy)
+
 # Some Preview Pictures
 
 ### Login
